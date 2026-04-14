@@ -1,0 +1,309 @@
+\documentclass[12pt,a4paper]{article}
+
+% --- Packages ---
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[magyar]{babel}
+\usepackage{geometry}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{longtable}
+\usepackage{hyperref}
+\usepackage{tabularx}
+\usepackage{titlesec}
+\usepackage{parskip}
+\usepackage{microtype}
+\usepackage{lmodern}
+\usepackage{xcolor}
+\usepackage{fancyhdr}
+\usepackage{graphicx}
+
+% --- Page geometry ---
+\geometry{
+  top=2.5cm,
+  bottom=2.5cm,
+  left=3cm,
+  right=2.5cm
+}
+
+% --- Colors ---
+\definecolor{accentblue}{RGB}{30, 80, 160}
+\definecolor{lightgray}{RGB}{245, 245, 245}
+\definecolor{tablegray}{RGB}{230, 235, 245}
+
+% --- Hyperref setup ---
+\hypersetup{
+  colorlinks=true,
+  linkcolor=accentblue,
+  urlcolor=accentblue,
+  citecolor=accentblue,
+  pdftitle={Ipari Képfeldolgozás --- 1. Mérföldkő},
+  pdfauthor={Ilonczai András}
+}
+
+% --- Section formatting ---
+\titleformat{\section}
+  {\large\bfseries\color{accentblue}}
+  {\thesection.}{0.5em}{}[\titlerule]
+
+\titleformat{\subsection}
+  {\normalsize\bfseries\color{accentblue!80!black}}
+  {\thesubsection}{0.5em}{}
+
+% --- Header / Footer ---
+\pagestyle{fancy}
+\fancyhf{}
+\rhead{\small Ipari Képfeldolgozás Lab.\ Gyak.\ | 1.\ Mérföldkő}
+\lhead{\small Ilonczai András}
+\rfoot{\small \thepage}
+\renewcommand{\headrulewidth}{0.4pt}
+
+% --- Table column types ---
+\newcolumntype{L}[1]{>{\raggedright\arraybackslash}p{#1}}
+\newcolumntype{C}[1]{>{\centering\arraybackslash}p{#1}}
+\newcolumntype{R}[1]{>{\raggedleft\arraybackslash}p{#1}}
+
+% ================================================================
+\begin{document}
+
+% --- Title page block ---
+\begin{center}
+  {\LARGE\bfseries\color{accentblue} Ipari Képfeldolgozás Laboratóriumi Gyakorlat}\\[0.4em]
+  {\large 1.\ Mérföldkő --- Algoritmus Terv \& Költségbecslés}\\[1.2em]
+  {\large\bfseries Projekt: Objektumok regisztrációja 3D pontfelhőn}\\[1em]
+  \hrule
+  \vspace{0.8em}
+  \begin{tabular}{ll}
+    \textbf{Beadási határidő:} & 2026. március 1.\ 23:59 \\
+    \textbf{Csapat tagjai:}    & Ilonczai András \\
+    \textbf{Dátum:}            & 2026. február \\
+  \end{tabular}
+  \vspace{0.8em}
+  \hrule
+\end{center}
+
+\vspace{1em}
+
+% ================================================================
+\section{Projekt áttekintés}
+
+A projekt célja 3D pontfelhők alapján történő objektum-regisztráció és illesztés megvalósítása. A regisztráció során két vagy több, különböző nézőpontból felvett pontfelhőt illesztünk össze egyetlen koherens háromdimenziós modellé. A folyamat alapvetően két lépésből áll: durva (\textit{coarse}) és finom (\textit{fine/dense}) illesztésből.
+
+A pontfelhő-regisztráció számos iparági alkalmazásban kulcsfontosságú, beleértve a minőségellenőrzést, a reverz tervezést (\textit{reverse engineering}) és a robotikai navigációt. A projekt eredménye egy olyan pipeline lesz, amely képes automatikusan illeszteni többszörös szkennelésből származó pontfelhőket.
+
+% ================================================================
+\section{Algoritmus terv}
+
+\subsection{Feldolgozási pipeline áttekintése}
+
+A teljes feldolgozási folyamat az alábbi főbb lépésekből áll:
+
+\begin{enumerate}
+  \item \textbf{Adatbevitel \& előfeldolgozás} \\
+    A nyers pontfelhők beolvasása, zajszűrés (\textit{Statistical Outlier Removal}, \textit{Radius Outlier Removal}), voxel grid alapú ritkítás (\textit{downsampling}) a számítási igény csökkentéséhez.
+
+  \item \textbf{Jellemzők kinyerése (\textit{Feature Extraction})} \\
+    Helyi geometriai jellemzők számítása: Normal becslés (PCA alapú), FPFH (\textit{Fast Point Feature Histograms}) vagy SHOT deszkriptorok alkalmazása kulcspontokhoz.
+
+  \item \textbf{Durva illesztés (\textit{Coarse Registration})} \\
+    RANSAC alapú kezdeti transzformáció becslése a leíró jellemzők alapján. Célja: megközelítőleg helyes elhelyezés biztosítása a finom illesztés számára.
+
+  \item \textbf{Finom illesztés (\textit{Fine Registration} --- ICP)} \\
+    \textit{Iterative Closest Point} (ICP) algoritmus alkalmazása a durva illesztés eredményére. Variánsok: \textit{Point-to-Point} ICP, \textit{Point-to-Plane} ICP. Konvergencia-kritérium: RMSE küszöbérték vagy max.\ iterációs szám.
+
+  \item \textbf{Minőségértékelés} \\
+    Az illesztés pontosságának mérése: RMSE (\textit{Root Mean Square Error}), overlap arány, vizuális ellenőrzés. Iteratív finomítás szükség esetén.
+
+  \item \textbf{Eredmény exportálás} \\
+    Összefűzött pontfelhő mentése (\texttt{.ply}, \texttt{.pcd} formátumban), transzformációs mátrixok naplózása.
+\end{enumerate}
+
+% ----------------------------------------------------------------
+\subsection{ICP algoritmus részletezése}
+
+Az ICP (\textit{Iterative Closest Point}) a pontfelhő-regisztráció egyik legelterjedtebb algoritmusa \cite{besl1992}. Az algoritmus iteratívan minimalizálja a forrás- és célpontfelhő közötti távolságot:
+
+\begin{enumerate}
+  \item Minden forrásponthoz megkeressük a legközelebbi célpontot (\textit{nearest neighbor search}, pl.\ KD-fa).
+  \item Kiszámítjuk az optimális forgatási ($\mathbf{R}$) és eltolási ($\mathbf{t}$) transzformációt (SVD alapú zárt megoldás).
+  \item Alkalmazzuk a transzformációt a forráspontfelhőre.
+  \item Az RMSE konvergál, vagy elérjük a maximális iterációszámot $\rightarrow$ leállás.
+\end{enumerate}
+
+% ----------------------------------------------------------------
+\subsection{RANSAC alapú globális regisztráció}
+
+A RANSAC (\textit{Random Sample Consensus}) algoritmust FPFH jellemzőkkel kombinálva alkalmazzuk a kezdeti transzformáció becslésére. Az FPFH jellemzők 33 dimenziós hisztogramban foglalják össze egy pont $k$-szomszédsági geometriáját, ami robusztus egyeztetést tesz lehetővé. A módszert Zhou et al.\ \cite{zhou2016} nyílt forráskódú implementációként is elérhetővé tette az Open3D könyvtárban.
+
+% ----------------------------------------------------------------
+\subsection{Felhasznált szoftvereszközök és könyvtárak}
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{L{3.5cm} C{2cm} L{6.5cm}}
+\toprule
+\textbf{Eszköz / Könyvtár} & \textbf{Verzió} & \textbf{Felhasználás} \\
+\midrule
+Python        & 3.10+  & Fő programozási nyelv \\
+Open3D        & 0.18   & Pontfelhő I/O, ICP, RANSAC, vizualizáció \\
+NumPy         & 1.26   & Numerikus számítások, mátrixműveletek \\
+SciPy         & 1.12   & KD-fa, lineáris algebra \\
+Matplotlib    & 3.8    & Eredmények vizualizációja, ábrázolás \\
+PyVista       & 0.43   & Interaktív 3D vizualizáció \\
+CloudCompare  & 2.13   & Referencia-szoftver, manuális ellenőrzés \\
+\bottomrule
+\end{tabular}
+\caption{Felhasznált szoftvereszközök és könyvtárak}
+\end{table}
+
+% ================================================================
+\section{Szakirodalmi áttekintés}
+
+\begin{thebibliography}{9}
+  \bibitem{besl1992}
+    Besl, P.\,J., \& McKay, N.\,D. (1992).
+    A method for registration of 3-D shapes.
+    \textit{IEEE Transactions on Pattern Analysis and Machine Intelligence}, 14(2), 239--256.
+
+  \bibitem{rusu2009}
+    Rusu, R.\,B., Blodow, N., \& Beetz, M. (2009).
+    Fast point feature histograms (FPFH) for 3D registration.
+    \textit{IEEE ICRA}, 3212--3217.
+
+  \bibitem{zhou2016}
+    Zhou, Q.-Y., Park, J., \& Koltun, V. (2016).
+    Fast global registration.
+    \textit{ECCV}, 766--782.
+
+  \bibitem{chen1992}
+    Chen, Y., \& Medioni, G. (1992).
+    Object modelling by registration of multiple range images.
+    \textit{Image and Vision Computing}, 10(3), 145--155.
+
+  \bibitem{zhou2018}
+    Zhou, Q.-Y., Park, J., \& Koltun, V. (2018).
+    Open3D: A modern library for 3D data processing.
+    \textit{arXiv:1801.09847}.
+\end{thebibliography}
+
+% ================================================================
+\section{Csapattagok és feladatkiosztás}
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{L{3.5cm} L{7cm} C{2.5cm}}
+\toprule
+\textbf{Csapattag} & \textbf{Feladat} & \textbf{Mérföldkő} \\
+\midrule
+Ilonczai András &
+  Algoritmus terv, szakirodalom feldolgozás, ICP implementáció.
+  Költségbecslés, RANSAC implementáció, eredmény kiértékelés &
+  1., 2., 3. \\
+\bottomrule
+\end{tabular}
+\caption{Csapattagok és feladatkiosztás}
+\end{table}
+
+% ================================================================
+\section{Projekt weboldal}
+
+A projekt haladását egy dedikált weboldalon tartom nyilván, amelyen mérföldkőnként bemutatjuk az elvégzett fejlesztéseket, eredményeket.
+
+\textbf{Weboldal URL:} \texttt{[ide kell a weboldal linkje]}
+
+Az oldalon elérhető tartalmak:
+\begin{itemize}
+  \item Projekt leírás és célkitűzések
+  \item Algoritmus terv és szakirodalom összefoglalása (1.\ mérföldkő)
+  \item Kezdeti implementáció és eredmények bemutatása (2.\ mérföldkő)
+  \item Végleges eredmények és értékelés (3.\ mérföldkő)
+\end{itemize}
+
+% ================================================================
+\section{Költségbecslés}
+
+Az alábbiakban összefoglaltam a projekt megvalósításához szükséges hardver- és szoftvereszközök becsült költségeit. Megjegyzés: a laborban rendelkezésre álló eszközöket nem szükséges megvásárolni, az árak tájékoztató jellegűek.
+
+\subsection{Hardverköltségek}
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{L{4cm} L{4.5cm} C{2.5cm} L{3cm}}
+\toprule
+\textbf{Eszköz} & \textbf{Leírás} & \textbf{Becsült ár (USD)} & \textbf{Megjegyzés} \\
+\midrule
+NextEngine 3D Scanner HD &
+  Nagy felbontású asztali 3D szkenner, 50--200 mikron pontosság, 2 lézercsík &
+  2\,995 &
+  Laborban rendelkezésre áll \\
+Számítógép (munkaállomás) &
+  Intel Core i7/i9, 32 GB RAM, NVIDIA RTX 3060+ GPU &
+  1\,500--2\,500 &
+  Laborban elérhető \\
+Forgóasztal / tartójig &
+  Objektum rögzítéséhez szkennelés közben &
+  50--150 &
+  Laborban elérhető \\
+Kalibrációs lap &
+  NextEngine kalibráló célpont &
+  $\sim$50 &
+  Szkennerhez tartozik \\
+\midrule
+\multicolumn{2}{l}{\textbf{HW részösszeg (ha megvásárolnánk):}} &
+  \multicolumn{2}{l}{\textbf{$\sim$4\,595--5\,695 USD}} \\
+\bottomrule
+\end{tabular}
+\caption{Hardverköltségek}
+\end{table}
+
+\subsection{Szoftverköltségek}
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{L{4.5cm} L{3.5cm} C{2.5cm} L{3cm}}
+\toprule
+\textbf{Szoftver} & \textbf{Licensz típus} & \textbf{Ár / év (USD)} & \textbf{Megjegyzés} \\
+\midrule
+Python 3.10+              & Nyílt forráskód (PSF)              & 0 & Ingyenes \\
+Open3D 0.18               & MIT License                        & 0 & Ingyenes \\
+NumPy / SciPy / Matplotlib & BSD License                       & 0 & Ingyenes \\
+PyVista                   & MIT License                        & 0 & Ingyenes \\
+CloudCompare 2.13         & GNU GPL v2                         & 0 & Ingyenes \\
+ScanStudio HD (NextEngine) & Kereskedelmi (szkennerhez jár)    & 0 & Szkenner szoftver \\
+Jupyter Notebook / VS Code & MIT / Ingyenes                   & 0 & Fejlesztői környezet \\
+\midrule
+\multicolumn{2}{l}{\textbf{SW részösszeg:}} &
+  \multicolumn{2}{l}{\textbf{0 USD} (minden szoftver ingyenes)} \\
+\bottomrule
+\end{tabular}
+\caption{Szoftverköltségek}
+\end{table}
+
+\subsection{Összesített költségbecslés}
+
+\begin{table}[h!]
+\centering
+\begin{tabular}{L{5.5cm} C{3.5cm} L{4.5cm}}
+\toprule
+\textbf{Kategória} & \textbf{Becsült költség (USD)} & \textbf{Megjegyzés} \\
+\midrule
+Hardver (szkenner + PC)            & 4\,595--5\,695 & Laborban rendelkezésre áll \\
+Szoftver (összes eszköz)           & 0              & Nyílt forráskódú / ingyenes \\
+Egyéb (kalibrációs testek, stb.)   & $\sim$50--100  & Opcionális \\
+\midrule
+\textbf{ÖSSZESEN (ha nulláról vennénk)} & \textbf{$\sim$4\,645--5\,795 USD} & \\
+\textbf{Tényleges projektköltség}       & \textbf{$\sim$0 USD} & Labor infrastruktúra \\
+\bottomrule
+\end{tabular}
+\caption{Összesített költségbecslés}
+\end{table}
+
+\vspace{0.5em}
+\noindent\textit{Megjegyzés:} A projekt kizárólag nyílt forráskódú szoftvereket és a laboratóriumi infrastruktúrát vesz igénybe, ezért a tényleges projektköltség minimális. Kereskedelmi 3D szkenner szoftver (pl.\ Artec Studio, GeoMagic) alternatívaként szóba jöhetne, de ezek éves licenszdíja 1\,500--5\,000 USD körül van --- ezeket a projekt nem igényli.
+
+% ================================================================
+\vspace{2em}
+\noindent\rule{\textwidth}{0.4pt}\\
+\small\textit{Ipari Képfeldolgozás Lab.\ Gyak.\ | 1.\ Mérföldkő | 2026. február 25.}
+
+\end{document}
