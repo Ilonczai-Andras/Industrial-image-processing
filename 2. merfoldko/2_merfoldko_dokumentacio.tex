@@ -1,0 +1,473 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[hungarian]{babel}
+\usepackage{geometry}
+\geometry{margin=2.5cm}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{bookmark}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{amsmath}
+\usepackage{float}
+\usepackage{enumitem}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue!60!black,
+    urlcolor=blue!60!black,
+    citecolor=blue!60!black,
+}
+
+\lstset{
+    basicstyle=\ttfamily\small,
+    keywordstyle=\color{blue!70!black}\bfseries,
+    commentstyle=\color{green!50!black}\itshape,
+    stringstyle=\color{red!60!black},
+    backgroundcolor=\color{gray!8},
+    frame=single,
+    framerule=0.4pt,
+    rulecolor=\color{gray!50},
+    breaklines=true,
+    showstringspaces=false,
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    language=Python,
+    tabsize=4,
+}
+
+\title{
+    \textbf{Ipari Képfeldolgozás Laboratóriumi Gyakorlat} \\[0.3cm]
+    \Large 2.~Mérföldkő — Kezdeti Implementáció \& Első Eredmények \\[0.3cm]
+    \large Projekt: Objektumok regisztrációja 3D pontfelhőn
+}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+\thispagestyle{empty}
+
+\vspace{-1.5cm}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{ll}
+\toprule
+\textbf{Beadási határidő} & 2026.~április 15.~23:59 \\
+\textbf{Csapat tagjai}     & Ilonczai András \\
+\textbf{Dátum}             & 2026.~április \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ============================================================
+\section{Projekt összefoglalás és státusz}
+% ============================================================
+
+Az 1.~mérföldkőben bemutatott algoritmus terv és költségbecslés alapján elkészült a teljes 3D pontfelhő regisztrációs pipeline kezdeti implementációja. A rendszer Python nyelven, az Open3D könyvtárra építve valósítja meg a Stanford Bunny adathalmaz 10 különböző szögből felvett pontfelhőjének automatikus illesztését és egyetlen koherens 3D modellé történő összefűzését.
+
+A jelenlegi állapotban a pipeline az alábbi funkcionalitásokat tartalmazza:
+\begin{itemize}[nosep]
+    \item Teljes feldolgozási lánc (betöltéstől az exportálásig)
+    \item RANSAC durva illesztés + ICP finom illesztés (Point-to-Point és Point-to-Plane)
+    \item Automatikus minőségértékelés (fitness, RMSE)
+    \item Vizualizáció (Matplotlib 2D + PyVista 3D off-screen renderelés)
+    \item Interaktív 3D megjelenítő (Open3D visualizer)
+\end{itemize}
+
+% ============================================================
+\section{Implementált algoritmus}
+% ============================================================
+
+\subsection{Pipeline architektúra}
+
+A megvalósított pipeline az 1.~mérföldkő tervét követi, hat fő lépésben:
+
+\begin{table}[H]
+\centering
+\begin{tabular}{clp{8cm}}
+\toprule
+\textbf{Lépés} & \textbf{Megnevezés} & \textbf{Leírás} \\
+\midrule
+1 & Adatbevitel \& előfeldolgozás & PLY fájlok beolvasása, voxel grid ritkítás ($v = 0{,}005$~m), Statistical Outlier Removal \\
+2 & Jellemzők kinyerése & PCA-alapú normális becslés, FPFH deszkriptorok (33D) \\
+3 & Durva illesztés & RANSAC globális regisztráció FPFH jellemzőkkel \\
+4 & Finom illesztés & ICP Point-to-Point és Point-to-Plane variánsok \\
+5 & Minőségértékelés & Fitness (overlap arány), inlier RMSE, korespondenciák száma \\
+6 & Eredmény exportálás & Merged PLY fájl, transzformációs mátrixok (JSON), log \\
+\bottomrule
+\end{tabular}
+\caption{A pipeline hat fő feldolgozási lépése.}
+\end{table}
+
+\subsection{Adatbevitel és előfeldolgozás (1.~lépés)}
+
+A Stanford Bunny adathalmaz egy \texttt{bun.conf} konfigurációs fájlt tartalmaz, amely 10 szkennt definiál ground-truth transzformációkkal (pozíció + quaternion orientáció).
+
+\paragraph{Konfigurációs fájl formátuma:}
+\begin{lstlisting}[language={}]
+bmesh <fájlnév> tx ty tz  qx qy qz qw
+\end{lstlisting}
+
+Az egyes szkenneket az alábbi előfeldolgozási lépéseken vezetjük át:
+
+\begin{enumerate}[nosep]
+    \item \textbf{Beolvasás:} Open3D \texttt{read\_point\_cloud()} PLY fájlok betöltéséhez.
+    \item \textbf{Voxel grid ritkítás:} $v = 0{,}005$~m (5~mm) méretű voxelekkel, amely jelentősen csökkenti a pontfelhő méretét a számítási hatékonyság érdekében.
+    \item \textbf{Statistical Outlier Removal (SOR):} 20 szomszéd, $2\sigma$ küszöbérték. Eltávolítja a zajos, izolált pontokat.
+\end{enumerate}
+
+\subsection{Jellemzők kinyerése (2.~lépés)}
+
+\paragraph{Normális becslés:}
+PCA-alapú normális becslés hibrid keresési paraméterekkel:
+\begin{itemize}[nosep]
+    \item Keresési sugár: $r = 2v = 0{,}01$~m
+    \item Maximális szomszédok: 30
+    \item Konzisztens orientáció: \texttt{orient\_normals\_consistent\_tangent\_plane(k=30)}
+\end{itemize}
+
+\paragraph{FPFH deszkriptorok:}
+A Fast Point Feature Histograms (FPFH) \cite{rusu2009} 33 dimenziós hisztogramban kódolja a lokális geometriai jellemzőket:
+\begin{itemize}[nosep]
+    \item Keresési sugár: $r = 5v = 0{,}025$~m
+    \item Maximális szomszédok: 100
+\end{itemize}
+
+Az FPFH robusztus jellemző-egyeztetést tesz lehetővé különböző nézőpontok között.
+
+\subsection{Durva illesztés — RANSAC (3.~lépés)}
+
+A RANSAC (Random Sample Consensus) \cite{zhou2016} algoritmus az FPFH jellemzők közötti megfeleltetésekből becsüli a kezdeti merev transzformációt:
+
+\begin{table}[H]
+\centering
+\begin{tabular}{ll}
+\toprule
+\textbf{Paraméter} & \textbf{Érték} \\
+\midrule
+Távolság küszöb & $1{,}5v = 0{,}0075$~m \\
+Maximális iteráció & 100\,000 \\
+Konfidencia & 0,999 \\
+Minta pontok (ransac\_n) & 3 \\
+\bottomrule
+\end{tabular}
+\caption{RANSAC paraméterek.}
+\end{table}
+
+Az ellenőrző feltételek (\textit{checkers}):
+\begin{itemize}[nosep]
+    \item \textbf{Edge length:} A három mintapont közötti élek arányainak konzisztenciája ($\geq 0{,}9$).
+    \item \textbf{Distance:} A transzformált pontpárok közötti távolság ellenőrzése.
+\end{itemize}
+
+\subsection{Finom illesztés — ICP (4.~lépés)}
+
+Az Iterative Closest Point (ICP) \cite{besl1992} algoritmus a RANSAC eredményéből kiindulva minimalizálja a forrás- és célpontfelhő közötti távolságot.
+
+Két variánst implementáltunk:
+
+\paragraph{Point-to-Point ICP:}
+\begin{equation}
+    E(\mathbf{R}, \mathbf{t}) = \sum_{i=1}^{N} \| \mathbf{R} \mathbf{p}_i + \mathbf{t} - \mathbf{q}_i \|^2
+\end{equation}
+
+\paragraph{Point-to-Plane ICP:}
+\begin{equation}
+    E(\mathbf{R}, \mathbf{t}) = \sum_{i=1}^{N} \left[ (\mathbf{R} \mathbf{p}_i + \mathbf{t} - \mathbf{q}_i) \cdot \mathbf{n}_i \right]^2
+\end{equation}
+
+ahol $\mathbf{p}_i$ a forrás pontok, $\mathbf{q}_i$ a legközelebbi célpontok, és $\mathbf{n}_i$ a célpont normálisai \cite{chen1992}.
+
+\begin{table}[H]
+\centering
+\begin{tabular}{ll}
+\toprule
+\textbf{Paraméter} & \textbf{Érték} \\
+\midrule
+Távolság küszöb & $0{,}4v = 0{,}002$~m \\
+Maximális iteráció & 200 \\
+Relatív fitness konvergencia & $10^{-6}$ \\
+Relatív RMSE konvergencia & $10^{-6}$ \\
+\bottomrule
+\end{tabular}
+\caption{ICP paraméterek.}
+\end{table}
+
+\subsection{Multi-scan rekonstrukció}
+
+A teljes rekonstrukció inkrementálisan történik:
+\begin{enumerate}[nosep]
+    \item A \texttt{bun000.ply} a referencia (target) scan.
+    \item Minden további scan a ground-truth transzformáció alkalmazásával kap kezdő pozíciót.
+    \item ICP Point-to-Plane finomítja az illesztést a már meglévő fúzionált felhőhöz.
+    \item A legjobb transzformáció kiválasztása (GT vs.\ ICP) a fitness alapján.
+    \item A transzformált scan hozzáfűzése a merged felhőhöz, voxel ritkítással.
+\end{enumerate}
+
+\subsection{Minőségértékelés (5.~lépés)}
+
+Három metrikát számolunk minden illesztéshez:
+
+\begin{itemize}[nosep]
+    \item \textbf{Fitness (overlap arány):} Az inlier megfeleltetések aránya a forrás pontszámához képest. Ideális: $\geq 0{,}8$.
+    \item \textbf{Inlier RMSE:} Az inlier pontpárok közötti négyzetes középhiba (méterben). Ideális: $< 0{,}002$~m.
+    \item \textbf{Korespondenciák száma:} A távolság-küszöbön belüli pontpárok száma.
+\end{itemize}
+
+% ============================================================
+\section{Implementáció részletei}
+% ============================================================
+
+\subsection{Projekt struktúra}
+
+\begin{lstlisting}[language={}]
+2. merfoldko/
+  registration_pipeline.py   # Fo pipeline (~630 sor)
+  visualize.py               # Interaktiv 3D megjelenito
+  setup_env.bat              # Kornyezet telepitese (Windows)
+  requirements.txt           # Python fuggosegek
+  commands.txt               # Hasznos parancsok
+  input/
+    bunny/
+      data/
+        bun.conf             # 10 scan konfiguracioja
+        bun000.ply ... ear_back.ply  # PLY pontfelhok
+  output/                    # Generalt eredmenyek (gitignore-ban)
+\end{lstlisting}
+
+\subsection{Felhasznált könyvtárak}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lll}
+\toprule
+\textbf{Könyvtár} & \textbf{Verzió} & \textbf{Felhasználás} \\
+\midrule
+Open3D & $\geq$0.18.0 & Pontfelhő I/O, ICP, RANSAC, vizualizáció \\
+NumPy & $\geq$1.24.0 & Numerikus számítások, mátrixműveletek \\
+SciPy & $\geq$1.11.0 & Quaternion konverzió (\texttt{Rotation}) \\
+Matplotlib & $\geq$3.7.0 & 2D ábrák, minőségdiagramok \\
+PyVista & $\geq$0.43.0 & Off-screen 3D renderelés \\
+\bottomrule
+\end{tabular}
+\caption{Python függőségek.}
+\end{table}
+
+\subsection{Főbb implementációs döntések}
+
+\begin{enumerate}
+    \item \textbf{Voxel méret ($v = 5$~mm):} A Stanford Bunny ~0,2~m magas. Az 5~mm-es voxel jó egyensúlyt ad a részletesség és a számítási sebesség között.
+    \item \textbf{Ground-truth inicializáció:} A multi-scan fúzió a \texttt{bun.conf} fájl GT transzformációit használja kezdő becslésként, amit ICP finomít. Ez robusztusabb, mint a puszta RANSAC, mivel a Bunny szimmetriája félrevezetheti a globális regisztrációt.
+    \item \textbf{Inkrementális fúzió:} Minden scant az eddigi merged felhőhöz illesztünk, nem pedig páronként. Ez csökkenti a kumulatív hibát.
+    \item \textbf{Automatikus minőségválasztás:} Ha az ICP nem javít a GT-n (fitness alapján), a rendszer a GT transzformációt tartja meg.
+\end{enumerate}
+
+% ============================================================
+\section{Bemeneti adathalmaz}
+% ============================================================
+
+A Stanford Bunny adathalmaz \cite{open3d2018} 10 különböző nézőpontból tartalmaz pontfelhőket:
+
+\begin{table}[H]
+\centering
+\begin{tabular}{ll}
+\toprule
+\textbf{Fájl} & \textbf{Leírás} \\
+\midrule
+\texttt{bun000.ply} & Referencia nézet (0°) \\
+\texttt{bun045.ply} & 45° elforgatás \\
+\texttt{bun090.ply} & 90° elforgatás \\
+\texttt{bun180.ply} & 180° elforgatás \\
+\texttt{bun270.ply} & 270° elforgatás \\
+\texttt{bun315.ply} & 315° elforgatás \\
+\texttt{top2.ply}   & Felülnézet 2 \\
+\texttt{top3.ply}   & Felülnézet 3 \\
+\texttt{chin.ply}   & Áll alulnézete \\
+\texttt{ear\_back.ply} & Fül hátsó oldala \\
+\bottomrule
+\end{tabular}
+\caption{A Stanford Bunny adathalmaz 10 scan fájlja.}
+\end{table}
+
+% ============================================================
+\section{Első eredmények}
+% ============================================================
+
+\subsection{Pipeline futtatás}
+
+A pipeline futtatása:
+\begin{lstlisting}[language=bash]
+cd "2. merfoldko"
+.\setup_env.bat
+.venv\Scripts\python.exe registration_pipeline.py
+\end{lstlisting}
+
+\subsection{Generált eredmények}
+
+A pipeline az \texttt{output/} könyvtárba az alábbi fájlokat generálta:
+
+\begin{itemize}[nosep]
+    \item \texttt{bunny\_full\_reconstruction.ply} — a 10 scan összefűzött pontfelhője (2\,585 pont)
+    \item \texttt{transforms.json} — végső transzformációs mátrixok (fájlnév → 4$\times$4 mátrix)
+    \item \texttt{pipeline\_log.txt} — részletes futási napló (időbélyeges)
+\end{itemize}
+
+\subsection{Előfeldolgozási statisztikák}
+
+Az egyes szkennelések pontszámának alakulása az előfeldolgozás során:
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lccc}
+\toprule
+\textbf{Scan} & \textbf{Eredeti} & \textbf{Voxel után} & \textbf{SOR után} \\
+\midrule
+bun000.ply     & 40\,256 & 1\,408 & 1\,348 \\
+bun045.ply     & 40\,097 & 1\,335 & 1\,269 \\
+bun090.ply     & 30\,379 & 1\,251 & 1\,217 \\
+bun180.ply     & 40\,251 & 1\,365 & 1\,342 \\
+bun270.ply     & 31\,701 & 1\,243 & 1\,194 \\
+top2.ply       & 38\,298 & 1\,397 & 1\,337 \\
+top3.ply       & 36\,023 & 1\,275 & 1\,257 \\
+bun315.ply     & 35\,336 & 1\,387 & 1\,348 \\
+chin.ply       & 37\,738 & 1\,425 & 1\,370 \\
+ear\_back.ply  & 32\,193 & 1\,173 & 1\,168 \\
+\midrule
+\textbf{Összesen} & \textbf{362\,272} & \textbf{13\,259} & \textbf{12\,850} \\
+\bottomrule
+\end{tabular}
+\caption{Pontszám változása az előfeldolgozás során. A voxel ritkítás ($v = 5$~mm) és SOR szűrés a pontszámot átlagosan 96,5\%-kal csökkentette.}
+\end{table}
+
+\subsection{Regisztrációs minőség}
+
+Az alábbi táblázat a pipeline futtatásának tényleges eredményeit tartalmazza. Minden scant a már meglévő fúzionált felhőhöz illesztettünk; a rendszer automatikusan a jobb fitness-értékű módszert választotta (ICP P2Plane refinement vs.\ puszta GT).
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lcccc}
+\toprule
+\textbf{Scan} & \textbf{Fitness} & \textbf{Inlier RMSE (m)} & \textbf{\#Corr} & \textbf{Módszer} \\
+\midrule
+bun045.ply     & 0,9125 & 0,001851 & 1\,158 & ICP P2Plane \\
+bun090.ply     & 0,6122 & 0,002033 &   745 & ICP P2Plane \\
+bun180.ply     & 0,4858 & 0,002442 &   652 & ICP P2Plane \\
+bun270.ply     & 0,9497 & 0,002320 & 1\,134 & GT \\
+bun315.ply     & 0,9918 & 0,002062 & 1\,337 & ICP P2Plane \\
+top2.ply       & 0,9783 & 0,002327 & 1\,308 & ICP P2Plane \\
+top3.ply       & 1,0000 & 0,002227 & 1\,257 & ICP P2Plane \\
+chin.ply       & 0,7686 & 0,002224 & 1\,053 & ICP P2Plane \\
+ear\_back.ply  & 1,0000 & 0,002185 & 1\,168 & ICP P2Plane \\
+\midrule
+\textbf{Átlag} & \textbf{0,8554} & \textbf{0,002186} & & \\
+\bottomrule
+\end{tabular}
+\caption{Multi-scan regisztrációs eredmények (pipeline futtatás: 2026-04-14).}
+\end{table}
+
+\paragraph{Eredmények elemzése:}
+\begin{itemize}[nosep]
+    \item A legjobb illesztést a \texttt{top3.ply} és \texttt{ear\_back.ply} érte el (fitness = 1,0000), ami teljes átfedést jelez a meglévő modellel.
+    \item A \texttt{bun315.ply} és \texttt{bun270.ply} szintén kiváló eredményt mutat (fitness $>$ 0,94).
+    \item A \texttt{bun180.ply} érte el a legalacsonyabb fitness-értéket (0,4858), ami a 180°-os nézet korlátozott átfedésére utal az addigi modellel.
+    \item Az ICP P2Plane refinement 8 esetből 8-ban javított vagy azonos eredményt adott a GT-hez képest; egyedül a \texttt{bun270.ply} esetében maradt a GT a jobb választás.
+    \item Az átlagos inlier RMSE 0,002186~m ($\approx$2,2~mm), ami az 5~mm-es voxel mérethez képest jó pontosságot jelent.
+    \item A végső rekonstrukció \textbf{2\,585 pontot} tartalmaz (voxel-ritkítás után).
+\end{itemize}
+
+\subsection{Vizualizáció}
+
+Az interaktív megjelenítő futtatása:
+\begin{lstlisting}[language=bash]
+.venv\Scripts\python.exe visualize.py
+\end{lstlisting}
+
+A megjelenítő lehetőségei:
+\begin{itemize}[nosep]
+    \item Egyedi input szkennelések megtekintése (magasság szerinti színezéssel)
+    \item A teljes rekonstrukció megjelenítése Poisson felületrekonstrukcióval
+    \item Interaktív forgatás, zoom, pont méretezés
+\end{itemize}
+
+% ============================================================
+\section{Értékelés és következő lépések}
+% ============================================================
+
+\subsection{Jelenlegi eredmények értékelése}
+
+\begin{itemize}
+    \item A pipeline sikeresen beolvassa mind a 10 Stanford Bunny scant.
+    \item Az előfeldolgozás (voxel + SOR) hatékonyan csökkenti a pontszámot és a zajt.
+    \item A RANSAC + ICP kombináció megbízhatóan illeszti a szomszédos nézeteket.
+    \item A ground-truth inicializáció biztosítja a robusztus konvergenciát, különösen a top és ear\_back nézeteknél, amelyeknél a geometriai átfedés korlátozott.
+\end{itemize}
+
+\subsection{Ismert korlátok}
+
+\begin{itemize}
+    \item A szimmetrikus részek (pl.\ a nyúl két oldala) félrevezethetik a puszta RANSAC-ot GT inicializáció nélkül.
+    \item Az inkrementális fúzió kumulatív hibát halmozhat fel sok scan esetén (drift).
+    \item A voxel-ritkítás finom geometriai részleteket (fül, orr) elmoshat.
+\end{itemize}
+
+\subsection{3.~mérföldkőre tervezett fejlesztések}
+
+\begin{enumerate}[nosep]
+    \item Globális optimalizáció (pose graph) a drift csökkentéséhez.
+    \item Colored ICP kipróbálása (ha textúra-információ elérhető).
+    \item Több adathalmaz tesztelése (nem csak Stanford Bunny).
+    \item Paraméter-érzékenységi elemzés (voxel méret, ICP küszöb hatása).
+    \item A végleges eredmények számszerű összefoglalása és összehasonlítása.
+\end{enumerate}
+
+% ============================================================
+\section{Projekt weboldal}
+% ============================================================
+
+A projekt haladása egy dedikált weboldalon követhető, mérföldkőnként elkülönítve:
+
+\begin{itemize}[nosep]
+    \item \textbf{1.~mérföldkő:} Algoritmus terv és költségbecslés
+    \item \textbf{2.~mérföldkő:} Kezdeti implementáció és első eredmények (jelen dokumentum)
+    \item \textbf{3.~mérföldkő:} Végleges eredmények és értékelés
+\end{itemize}
+
+\textbf{Weboldal URL:} \textit{(kitöltendő)}
+
+% ============================================================
+\begin{thebibliography}{9}
+\bibitem{besl1992}
+Besl, P.~J. \& McKay, N.~D. (1992).
+A method for registration of 3-D shapes.
+\textit{IEEE TPAMI}, 14(2), 239--256.
+
+\bibitem{rusu2009}
+Rusu, R.~B., Blodow, N. \& Beetz, M. (2009).
+Fast point feature histograms (FPFH) for 3D registration.
+\textit{IEEE ICRA}, 3212--3217.
+
+\bibitem{zhou2016}
+Zhou, Q.-Y., Park, J. \& Koltun, V. (2016).
+Fast global registration.
+\textit{ECCV}, 766--782.
+
+\bibitem{chen1992}
+Chen, Y. \& Medioni, G. (1992).
+Object modelling by registration of multiple range images.
+\textit{Image and Vision Computing}, 10(3), 145--155.
+
+\bibitem{open3d2018}
+Zhou, Q.-Y., Park, J. \& Koltun, V. (2018).
+Open3D: A modern library for 3D data processing.
+\textit{arXiv:1801.09847}.
+\end{thebibliography}
+
+\vfill
+\noindent\rule{\textwidth}{0.4pt}\\
+\small\textit{Ipari Képfeldolgozás Lab.\ Gyak.\ | 2.~Mérföldkő | 2026.~április}
+
+\end{document}
