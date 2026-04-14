@@ -1,0 +1,7 @@
+py -m venv .venv
+.\.venv\Scripts\activate
+
+.\setup_env.bat
+
+.venv\Scripts\python.exe registration_pipeline.py
+.venv\Scripts\python.exe .\visualize.py
