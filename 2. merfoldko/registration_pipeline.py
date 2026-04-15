@@ -29,7 +29,6 @@ import matplotlib.pyplot as plt
 
 import numpy as np
 import open3d as o3d
-from scipy.spatial.transform import Rotation
 
 try:
     import pyvista as pv
@@ -42,13 +41,16 @@ except ImportError:
 # ─────────────────────────────────────────────────────────────────────
 
 WORKSPACE_DIR = os.path.dirname(os.path.abspath(__file__))
-DATA_DIR      = os.path.join(WORKSPACE_DIR, "input", "bunny", "data")
-CONF_FILE     = os.path.join(DATA_DIR, "bun.conf")
+DATA_DIR      = os.path.join(WORKSPACE_DIR, "input", "data")
+SCAN_DIR      = DATA_DIR
 OUTPUT_DIR    = os.path.join(WORKSPACE_DIR, "output")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-# Voxel méret (méter egységben; a bunny ~0.2 m magas)
 VOXEL_SIZE = 0.005           # 5 mm
+
+FITNESS_THRESHOLD = 0.3
+
+MERGE_FITNESS_THRESHOLD = 0.55
 
 # Normális becslés
 NORMAL_RADIUS = VOXEL_SIZE * 2
@@ -58,10 +60,10 @@ NORMAL_MAX_NN = 30
 FPFH_RADIUS = VOXEL_SIZE * 5
 FPFH_MAX_NN = 100
 
-# RANSAC
-RANSAC_DIST_THRESH  = VOXEL_SIZE * 1.5
-RANSAC_MAX_ITER     = 100_000
-RANSAC_CONFIDENCE   = 0.999
+RANSAC_FEATURE_VOXEL = VOXEL_SIZE * 2
+RANSAC_DIST_THRESH   = RANSAC_FEATURE_VOXEL * 1.5
+RANSAC_MAX_ITER      = 200_000
+RANSAC_CONFIDENCE    = 0.9999
 
 # ICP
 ICP_DIST_THRESH = VOXEL_SIZE * 0.4
@@ -84,30 +86,29 @@ log = logging.getLogger(__name__)
 
 
 # ─────────────────────────────────────────────────────────────────────
-# 1a. LÉPÉS: bun.conf beolvasása (ground-truth transzformációk)
+# 1a. LÉPÉS: PLY fájlok felfedezése egy könyvtárból (nincs .conf szükség)
 # ─────────────────────────────────────────────────────────────────────
 
-def parse_conf(conf_file: str) -> list:
+def discover_ply_files(scan_dir: str) -> list[str]:
     """
-    Beolvassa a bun.conf fájlt.
-    Formátum: bmesh <filename> tx ty tz  qx qy qz qw
-    Visszatér: [{'file': str, 'gt_transform': np.ndarray (4x4)}, ...]
+    Rekurzívan megkeresi az összes .ply fájlt a megadott könyvtárban.
+    A fájlok neve alapján rendezi őket a determinisztikus sorrend érdekében.
+    Visszatér: abszolút fájlútvonalak listája.
     """
-    scans = []
-    with open(conf_file, "r") as fh:
-        for line in fh:
-            parts = line.strip().split()
-            if not parts or parts[0] != "bmesh":
-                continue
-            fname = parts[1]
-            tx, ty, tz       = float(parts[2]), float(parts[3]), float(parts[4])
-            qx, qy, qz, qw   = float(parts[5]), float(parts[6]), float(parts[7]), float(parts[8])
-            rot = Rotation.from_quat([qx, qy, qz, qw]).as_matrix()
-            T = np.eye(4)
-            T[:3, :3] = rot.T
-            T[:3, 3]  = [tx, ty, tz]
-            scans.append({"file": fname, "gt_transform": T})
-    return scans
+    ply_files = []
+    for root, _dirs, files in os.walk(scan_dir):
+        for fname in files:
+            if fname.lower().endswith(".ply"):
+                ply_files.append(os.path.join(root, fname))
+    ply_files.sort()
+    if not ply_files:
+        raise FileNotFoundError(
+            f"Nem található .ply fájl ebben a könyvtárban: {scan_dir}"
+        )
+    log.info(f"  Felfedezett .ply fájlok ({len(ply_files)} db) a(z) '{scan_dir}' könyvtárból:")
+    for p in ply_files:
+        log.info(f"    {os.path.relpath(p, scan_dir)}")
+    return ply_files
 
 
 # ─────────────────────────────────────────────────────────────────────
@@ -215,13 +216,21 @@ def fine_registration(
     tgt: o3d.geometry.PointCloud,
     init_transform: np.ndarray,
     mode: str = "point_to_plane",
+    dist_thresh: float | None = None,
 ) -> o3d.pipelines.registration.RegistrationResult:
     """
     ICP finom illesztés.
     mode: 'point_to_point'  - forrás- és célpontok távolságát minimalizálja
           'point_to_plane'  - gyorsabban konvergál sík felületek esetén
+    dist_thresh: ICP correspondence distance threshold.
+                 Defaults to ICP_DIST_THRESH.
+                 Pass a larger value (e.g. VOXEL_SIZE * 1.5) when the
+                 initial transform comes from RANSAC and may be coarser.
     Leállási feltétel: RMSE konvergencia VAGY max iteráció elérése.
     """
+    if dist_thresh is None:
+        dist_thresh = ICP_DIST_THRESH
+
     if mode == "point_to_point":
         estimation = o3d.pipelines.registration.TransformationEstimationPointToPoint()
     else:
@@ -236,7 +245,7 @@ def fine_registration(
     t0 = time.time()
     result = o3d.pipelines.registration.registration_icp(
         src, tgt,
-        ICP_DIST_THRESH,
+        dist_thresh,
         init=init_transform,
         estimation_method=estimation,
         criteria=criteria,
@@ -491,107 +500,204 @@ def export_result(
 
 
 # ─────────────────────────────────────────────────────────────────────
-# Teljes multi-scan fúzió (összes bun.conf scan)
+# Teljes multi-scan fúzió – vak globális regisztráció (nincs GT)
 # ─────────────────────────────────────────────────────────────────────
 
-def full_reconstruction(scans: list) -> tuple:
-    """
-    Inkrementális regisztráció:
-    - bun000.ply lesz a referencia (target)
-    - A bun.conf ground-truth transzformációkat használja kezdeti illesztésként
-    - Minden scant ICP-vel finomít a már merged felhőhöz képest
-    Visszatér: (merged_pcd, {filename: 4x4 transform})
-    """
-    log.info("\n" + "=" * 65)
-    log.info("  TELJES REKONSTRUKCIÓ - multi-scan fúzió (GT init + ICP refine)")
-    log.info("=" * 65)
-
-    ref_file = os.path.join(DATA_DIR, scans[0]["file"])
-    log.info(f"[REF] Referencia scan: {scans[0]['file']}")
-    merged_pcd = load_and_preprocess(ref_file, VOXEL_SIZE)
-
-    # GT transzformáció alkalmazása a referenciára (szkenner→világ)
-    ref_gt = scans[0]["gt_transform"]
-    merged_pcd.transform(ref_gt)
-
-    # Normálisok a referencián (P2Plane ICP-hez)
-    merged_pcd.estimate_normals(
+def _prepare_normals(pcd: o3d.geometry.PointCloud) -> None:
+    """Normálisok becslése és konzisztens orientálása (helyben)."""
+    pcd.estimate_normals(
         o3d.geometry.KDTreeSearchParamHybrid(radius=VOXEL_SIZE * 2, max_nn=30)
     )
-    merged_pcd.orient_normals_consistent_tangent_plane(k=30)
+    pcd.orient_normals_consistent_tangent_plane(k=30)
 
-    cumulative_transforms = {scans[0]["file"]: ref_gt.tolist()}
-    all_metrics = []
 
-    for scan in scans[1:]:
-        src_file = os.path.join(DATA_DIR, scan["file"])
-        log.info(f"\n--- Regisztrálás: {scan['file']} → merged felhő ---")
+def _register_scan_to_model(
+    src: o3d.geometry.PointCloud,
+    merged_pcd: o3d.geometry.PointCloud,
+    label: str,
+) -> tuple[np.ndarray, float]:
+    """
+    Register *src* against *merged_pcd* using the full
+    coarse-RANSAC → progressive-ICP pipeline.
+
+    Returns (best_transform_4x4, final_fitness).
+    """
+    src_coarse = src.voxel_down_sample(RANSAC_FEATURE_VOXEL)
+    _prepare_normals(src_coarse)
+    src_fpfh = o3d.pipelines.registration.compute_fpfh_feature(
+        src_coarse, o3d.geometry.KDTreeSearchParamHybrid(
+            radius=RANSAC_FEATURE_VOXEL * 5, max_nn=100))
+
+    mrg_coarse = merged_pcd.voxel_down_sample(RANSAC_FEATURE_VOXEL)
+    _prepare_normals(mrg_coarse)
+    mrg_fpfh = o3d.pipelines.registration.compute_fpfh_feature(
+        mrg_coarse, o3d.geometry.KDTreeSearchParamHybrid(
+            radius=RANSAC_FEATURE_VOXEL * 5, max_nn=100))
+
+    log.info(f"    FPFH (coarse voxel={RANSAC_FEATURE_VOXEL:.4f}): "
+             f"src={src_fpfh.data.shape[1]}, merged={mrg_fpfh.data.shape[1]}")
+
+    log.info("  [3] Durva illesztés – RANSAC")
+    ransac_res = coarse_registration(
+        src_coarse, mrg_coarse, src_fpfh, mrg_fpfh, RANSAC_FEATURE_VOXEL
+    )
+
+    if ransac_res.fitness < FITNESS_THRESHOLD:
+        log.warning(
+            f"  ⚠ RANSAC fitness ({ransac_res.fitness:.4f}) < "
+            f"{FITNESS_THRESHOLD} — {label} overlap may be insufficient."
+        )
+
+    icp_distances = [
+        VOXEL_SIZE * 3.0,   # coarse pass
+        VOXEL_SIZE * 1.5,   # medium pass
+        VOXEL_SIZE * 0.5,   # fine pass
+    ]
+    current_T = ransac_res.transformation
+    for pass_idx, d in enumerate(icp_distances, start=1):
+        log.info(f"  [4.{pass_idx}] ICP Point-to-Plane  dist_thresh={d:.4f}")
+        icp_res = fine_registration(
+            src, merged_pcd, current_T,
+            mode="point_to_plane",
+            dist_thresh=d,
+        )
+        if icp_res.fitness >= 0.05:
+            current_T = icp_res.transformation
+
+    m = evaluate_registration(
+        src, merged_pcd, current_T, VOXEL_SIZE, label
+    )
+    return current_T, m["fitness"]
+
+
+def full_reconstruction(ply_files: list[str]) -> tuple:
+    """
+    Inkrementális "Global-to-Local" regisztráció .conf nélkül.
+
+    Strategy:
+    1. First .ply is the identity reference (merged model seed).
+    2. For every subsequent scan:
+       a. Coarse RANSAC with FPFH at 2× voxel scale.
+       b. Progressive ICP (3 passes, coarse → fine distance).
+       c. Evaluate fitness at the base VOXEL_SIZE.
+       d. If fitness ≥ MERGE_FITNESS_THRESHOLD → merge into model.
+          Otherwise → defer the scan for a later retry.
+    3. After the first pass, retry all deferred scans (the model
+       now has more coverage, so previously-failed scans may align).
+
+    Returns: (merged_pcd, {filepath: 4x4 transform list})
+    """
+    log.info("\n" + "=" * 65)
+    log.info("  TELJES REKONSTRUKCIÓ – vak globális regisztráció (RANSAC → ICP)")
+    log.info("=" * 65)
+
+    # ── Reference scan ───────────────────────────────────────────────
+    ref_file = ply_files[0]
+    log.info(f"[REF] Referencia scan: {os.path.basename(ref_file)}")
+    merged_pcd = load_and_preprocess(ref_file, VOXEL_SIZE)
+    _prepare_normals(merged_pcd)
+
+    cumulative_transforms: dict = {ref_file: np.eye(4).tolist()}
+    all_metrics: list = []
+    deferred: list[tuple[str, o3d.geometry.PointCloud]] = []  # (path, pcd)
+
+    for idx, src_file in enumerate(ply_files[1:], start=1):
+        label = os.path.basename(src_file)
+        log.info(f"\n--- [{idx}/{len(ply_files)-1}] {label} → merged ---")
 
         src = load_and_preprocess(src_file, VOXEL_SIZE)
+        _prepare_normals(src)
 
-        # GT transzformáció (szkenner→világ) mint kezdő becslés
-        gt_T = scan["gt_transform"]
-        log.info(f"    GT transzformáció alkalmazása kezdő becslésként")
+        best_T, fitness = _register_scan_to_model(src, merged_pcd, label)
 
-        # Normálisok a source-on
-        src.estimate_normals(
-            o3d.geometry.KDTreeSearchParamHybrid(radius=VOXEL_SIZE * 2, max_nn=30)
-        )
-        src.orient_normals_consistent_tangent_plane(k=30)
+        if fitness < MERGE_FITNESS_THRESHOLD:
+            log.warning(
+                f"    ✗ Fitness {fitness:.4f} < {MERGE_FITNESS_THRESHOLD} — "
+                f"deferring {label} for retry."
+            )
+            deferred.append((src_file, src))
+            continue
 
-        # GT-vel transzformált source értékelése
-        m_gt = evaluate_registration(src, merged_pcd, gt_T, VOXEL_SIZE, f"{scan['file']} GT")
+        log.info(f"    ✓ Elfogadva (fitness={fitness:.4f}) – beolvasztás")
+        cumulative_transforms[src_file] = best_T.tolist()
+        all_metrics.append({"label": label, "fitness": fitness,
+                            "inlier_rmse": 0.0, "correspondences": 0})
 
-        # ICP Point-to-Plane finomítás a GT-ből indulva
-        icp_res = fine_registration(
-            src, merged_pcd, gt_T, mode="point_to_plane"
-        )
-
-        m_icp = evaluate_registration(src, merged_pcd, icp_res.transformation, VOXEL_SIZE, f"{scan['file']} ICP")
-
-        # A jobbik választása (GT vs ICP-refined)
-        if m_icp["fitness"] >= m_gt["fitness"]:
-            best_T = icp_res.transformation
-            log.info(f"    → ICP finomított transzformáció használata (fitness={m_icp['fitness']:.4f})")
-        else:
-            best_T = gt_T
-            log.info(f"    → GT transzformáció használata (fitness={m_gt['fitness']:.4f})")
-
-        cumulative_transforms[scan["file"]] = best_T.tolist()
-        all_metrics.append(m_icp if m_icp["fitness"] >= m_gt["fitness"] else m_gt)
-
-        # Transzformált source fúziója a merged felhőbe
-        src_t = copy.deepcopy(src)
-        src_t.transform(best_T)
-        merged_pcd = merged_pcd + src_t
-
-        # Ritkítás, hogy kezelhető maradjon
+        src_aligned = copy.deepcopy(src)
+        src_aligned.transform(best_T)
+        merged_pcd = merged_pcd + src_aligned
         merged_pcd = merged_pcd.voxel_down_sample(VOXEL_SIZE)
-        # Normálisok frissítése a következő iterációhoz
-        merged_pcd.estimate_normals(
-            o3d.geometry.KDTreeSearchParamHybrid(radius=VOXEL_SIZE * 2, max_nn=30)
-        )
-        merged_pcd.orient_normals_consistent_tangent_plane(k=30)
+        _prepare_normals(merged_pcd)
 
-        log.info(f"    Merged felhő mérete: {len(merged_pcd.points)} pont")
+        log.info(f"    Merged felhő: {len(merged_pcd.points)} pont")
 
-    # ── Teljes modell mentése ────────────────────────────────────────
-    out_ply = os.path.join(OUTPUT_DIR, "bunny_full_reconstruction.ply")
+    # ── Retry pass – attempt deferred scans against the richer model ─
+    max_retries = 3
+    for retry_round in range(1, max_retries + 1):
+        if not deferred:
+            break
+        log.info(f"\n{'─'*65}")
+        log.info(f"  RETRY KÍSÉRLET #{retry_round} – {len(deferred)} halasztott scan")
+        log.info(f"{'─'*65}")
+
+        still_deferred: list[tuple[str, o3d.geometry.PointCloud]] = []
+        for src_file, src in deferred:
+            label = os.path.basename(src_file)
+            log.info(f"\n  Retry: {label}")
+
+            best_T, fitness = _register_scan_to_model(src, merged_pcd, label)
+
+            if fitness < MERGE_FITNESS_THRESHOLD:
+                log.warning(f"    ✗ Retry is sikertelen (fitness={fitness:.4f}) – "
+                            f"halasztva marad.")
+                still_deferred.append((src_file, src))
+                continue
+
+            log.info(f"    ✓ Retry sikeres (fitness={fitness:.4f}) – beolvasztás")
+            cumulative_transforms[src_file] = best_T.tolist()
+            all_metrics.append({"label": label, "fitness": fitness,
+                                "inlier_rmse": 0.0, "correspondences": 0})
+
+            src_aligned = copy.deepcopy(src)
+            src_aligned.transform(best_T)
+            merged_pcd = merged_pcd + src_aligned
+            merged_pcd = merged_pcd.voxel_down_sample(VOXEL_SIZE)
+            _prepare_normals(merged_pcd)
+
+            log.info(f"    Merged felhő: {len(merged_pcd.points)} pont")
+
+        deferred = still_deferred
+
+    # ── Report permanently failed scans ──────────────────────────────
+    if deferred:
+        log.warning("\n  ⚠ A következő scanokat nem sikerült illeszteni:")
+        for src_file, _ in deferred:
+            log.warning(f"    {os.path.basename(src_file)}")
+
+    # ── Save outputs ─────────────────────────────────────────────────
+    out_ply = os.path.join(OUTPUT_DIR, "full_reconstruction.ply")
     o3d.io.write_point_cloud(out_ply, merged_pcd)
     log.info(f"\nTeljes rekonstrukció mentve: {out_ply}  ({len(merged_pcd.points)} pont)")
 
-
-    # ── Transzformációs mátrixok mentése JSON-ba ─────────────────────
     transforms_json = os.path.join(OUTPUT_DIR, "transforms.json")
     with open(transforms_json, "w", encoding="utf-8") as fh:
         json.dump(cumulative_transforms, fh, indent=2)
     log.info(f"Transzformációk JSON: {transforms_json}")
 
-    # ── Mátrixok konzolra/logba ──────────────────────────────────────
     log.info("\n── Végső transzformációs mátrixok ──────────────────────")
-    for fname, T_list in cumulative_transforms.items():
+    for fpath, T_list in cumulative_transforms.items():
         T = np.array(T_list)
-        log.info(f"\n  {fname}:\n{np.array2string(T, precision=6, suppress_small=True)}")
+        log.info(
+            f"\n  {os.path.basename(fpath)}:\n"
+            f"{np.array2string(T, precision=6, suppress_small=True)}"
+        )
+
+    if all_metrics:
+        plot_registration_quality(
+            all_metrics,
+            "Regisztrációs minőség – teljes rekonstrukció",
+            os.path.join(OUTPUT_DIR, "full_reconstruction_quality.png"),
+        )
 
     return merged_pcd, cumulative_transforms
 
@@ -602,21 +708,39 @@ def full_reconstruction(scans: list) -> tuple:
 
 def main() -> None:
     log.info("Pontfelhő regisztrációs pipeline indul...")
-    log.info(f"  Adatkönyvtár   : {DATA_DIR}")
+    log.info(f"  Scan könyvtár  : {SCAN_DIR}")
     log.info(f"  Kimenet        : {OUTPUT_DIR}")
     log.info(f"  Voxel méret    : {VOXEL_SIZE} m")
+    log.info(f"  Fitness küszöb : {FITNESS_THRESHOLD}")
     log.info(f"  PyVista elérh. : {HAS_PYVISTA}")
 
-    # bun.conf beolvasása
-    scans = parse_conf(CONF_FILE)
-    log.info(f"  Scan-ek száma  : {len(scans)}")
-    for s in scans:
-        log.info(f"    {s['file']}")
+    # .ply fájlok felfedezése (nincs szükség .conf-ra)
+    ply_files = discover_ply_files(SCAN_DIR)
+    log.info(f"  Scan-ek száma  : {len(ply_files)}")
+
+    if len(ply_files) < 2:
+        log.warning("  Legalább 2 .ply fájl szükséges a regisztrációhoz – pipeline leáll.")
+        return
 
     # ─────────────────────────────────────────────────────────────────
-    # Teljes multi-scan rekonstrukció (mind a 10 scan)
+    # Teljes multi-scan rekonstrukció (vak globális regisztráció)
     # ─────────────────────────────────────────────────────────────────
-    full_reconstruction(scans)
+    merged_pcd, transforms = full_reconstruction(ply_files)
+
+    # Felülnézeti ábra a merged modellről
+    plot_merged_top_view(
+        merged_pcd,
+        os.path.join(OUTPUT_DIR, "merged_top_view.png"),
+        "Merged pontfelhő – felülnézet",
+    )
+
+    # PyVista 3D render
+    pyvista_render(
+        [merged_pcd],
+        ["#2196F3"],
+        "Teljes rekonstrukció",
+        os.path.join(OUTPUT_DIR, "full_reconstruction_3d.png"),
+    )
 
     log.info("\n" + "=" * 65)
     log.info("  PIPELINE KÉSZ")

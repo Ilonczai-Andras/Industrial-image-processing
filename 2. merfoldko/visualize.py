@@ -14,9 +14,9 @@ import os
 import open3d as o3d
 
 WORKSPACE_DIR = os.path.dirname(os.path.abspath(__file__))
-INPUT_DIR  = os.path.join(WORKSPACE_DIR, "input", "bunny", "data")
+INPUT_DIR  = os.path.join(WORKSPACE_DIR, "input", "data")
 OUTPUT_DIR = os.path.join(WORKSPACE_DIR, "output")
-OUTPUT_PLY = os.path.join(OUTPUT_DIR, "bunny_full_reconstruction.ply")
+OUTPUT_PLY = os.path.join(OUTPUT_DIR, "full_reconstruction.ply")
 
 
 def build_file_list():
@@ -36,7 +36,7 @@ def build_file_list():
 
     # Output teljes rekonstrukció
     files[str(idx)] = (
-        "[Output] bunny_full_reconstruction.ply",
+        "[Output] full_reconstruction.ply",
         OUTPUT_PLY,
     )
 
@@ -82,15 +82,14 @@ def reconstruct_mesh(pcd):
     )
     pcd.orient_normals_consistent_tangent_plane(k=30)
 
-    print("  Poisson felület-rekonstrukció (depth=9)...")
+    print("  Poisson felület-rekonstrukció (depth=8)...")
     mesh, densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
-        pcd, depth=9
+        pcd, depth=8
     )
 
-    # Alacsony sűrűségű (zajosabb) háromszögek levágása
     import numpy as np
     densities = np.asarray(densities)
-    thresh = np.percentile(densities, 5)
+    thresh = np.percentile(densities, 2)
     verts_to_remove = densities < thresh
     mesh.remove_vertices_by_mask(verts_to_remove)
 

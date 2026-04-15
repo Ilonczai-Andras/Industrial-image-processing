@@ -1,6 +1,3 @@
-py -m venv .venv
-.\.venv\Scripts\activate
-
 .\setup_env.bat
 
 .venv\Scripts\python.exe registration_pipeline.py
