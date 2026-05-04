@@ -29,6 +29,9 @@ import matplotlib.pyplot as plt
 
 import numpy as np
 import open3d as o3d
+import math
+import numpy as np
+import re
 
 try:
     import pyvista as pv
@@ -48,9 +51,9 @@ os.makedirs(OUTPUT_DIR, exist_ok=True)
 
 VOXEL_SIZE = 0.005           # 5 mm
 
-FITNESS_THRESHOLD = 0.3
+FITNESS_THRESHOLD = 0.15
 
-MERGE_FITNESS_THRESHOLD = 0.55
+MERGE_FITNESS_THRESHOLD = 0.25
 
 # Normális becslés
 NORMAL_RADIUS = VOXEL_SIZE * 2
@@ -115,27 +118,51 @@ def discover_ply_files(scan_dir: str) -> list[str]:
 # 1b. LÉPÉS: Pontfelhő betöltése & előfeldolgozása
 # ─────────────────────────────────────────────────────────────────────
 
-def load_and_preprocess(filepath: str, voxel_size: float) -> o3d.geometry.PointCloud:
-    """
-    1) Betölti a PLY fájlt (o3d.io.read_point_cloud)
-    2) Voxel-grid ritkítás (voxel_down_sample)
-    3) Statistical Outlier Removal (SOR) zajszűrés
-    """
+def load_and_preprocess(filepath: str, voxel_size: float) -> o3d.geometry.PointCloud | None:
     log.info(f"  Betöltés: {os.path.basename(filepath)}")
-    pcd = o3d.io.read_point_cloud(filepath)
-    n_raw = len(pcd.points)
-    log.info(f"    Eredeti pontszám      : {n_raw}")
+    
+    try:
+        pcd = o3d.io.read_point_cloud(filepath)
+        n_raw = len(pcd.points)
+        log.info(f"    Eredeti pontszám      : {n_raw}")
 
-    # Voxel grid ritkítás
-    pcd_down = pcd.voxel_down_sample(voxel_size)
-    log.info(f"    Voxel ritkítás után   : {len(pcd_down.points)}")
+        if n_raw == 0:
+            log.warning(f"    ⚠ HIBA: A pontfelhő üres! Kihagyás.")
+            return None
 
-    # Statistical Outlier Removal
-    pcd_clean, _ = pcd_down.remove_statistical_outlier(nb_neighbors=20, std_ratio=2.0)
-    log.info(f"    SOR szűrés után       : {len(pcd_clean.points)}")
+        pcd = pcd.remove_non_finite_points()
+        
+        pcd, _ = pcd.remove_statistical_outlier(nb_neighbors=20, std_ratio=2.0)
+        # --------------------------------
 
-    return pcd_clean
+        n_finite = len(pcd.points)
+        if n_finite < n_raw:
+            log.warning(f"    ⚠ Figyelem: Eltávolítva {n_raw - n_finite} db hibás/kiugró (outlier) pont!")
 
+        if n_finite == 0:
+            log.warning(f"    ⚠ HIBA: A fájl csak hibás pontokat tartalmazott! Kihagyás.")
+            return None
+
+        bbox = pcd.get_max_bound() - pcd.get_min_bound()
+        max_extent = max(bbox)
+        
+        if max_extent < 1e-6:
+            log.warning(f"    ⚠ HIBA: Hibás geometria (a kiterjedés 0). Kihagyás.")
+            return None
+            
+        if max_extent > voxel_size * 5000:
+            log.warning(f"    ⚠ HIBA: Extrém kiterjedés ({max_extent:.2f}). Sérült adat! Kihagyás.")
+            return None
+
+        pcd_down = pcd.voxel_down_sample(voxel_size)
+        log.info(f"    Voxel ritkítás után   : {len(pcd_down.points)}")
+
+        return pcd_down
+
+    except Exception as e:
+        log.error(f"    ⚠ KRITIKUS HIBA a ritkítás során: {e}")
+        log.warning(f"    A(z) {os.path.basename(filepath)} fájl sérült. Ugorjuk a következőre.")
+        return None
 
 # ─────────────────────────────────────────────────────────────────────
 # 2. LÉPÉS: Jellemzők kinyerése – normálisok + FPFH
@@ -516,44 +543,18 @@ def _register_scan_to_model(
     merged_pcd: o3d.geometry.PointCloud,
     label: str,
 ) -> tuple[np.ndarray, float]:
-    """
-    Register *src* against *merged_pcd* using the full
-    coarse-RANSAC → progressive-ICP pipeline.
+    log.info(f"  [3] Pre-aligned finomillesztés ({label})")
 
-    Returns (best_transform_4x4, final_fitness).
-    """
-    src_coarse = src.voxel_down_sample(RANSAC_FEATURE_VOXEL)
-    _prepare_normals(src_coarse)
-    src_fpfh = o3d.pipelines.registration.compute_fpfh_feature(
-        src_coarse, o3d.geometry.KDTreeSearchParamHybrid(
-            radius=RANSAC_FEATURE_VOXEL * 5, max_nn=100))
-
-    mrg_coarse = merged_pcd.voxel_down_sample(RANSAC_FEATURE_VOXEL)
-    _prepare_normals(mrg_coarse)
-    mrg_fpfh = o3d.pipelines.registration.compute_fpfh_feature(
-        mrg_coarse, o3d.geometry.KDTreeSearchParamHybrid(
-            radius=RANSAC_FEATURE_VOXEL * 5, max_nn=100))
-
-    log.info(f"    FPFH (coarse voxel={RANSAC_FEATURE_VOXEL:.4f}): "
-             f"src={src_fpfh.data.shape[1]}, merged={mrg_fpfh.data.shape[1]}")
-
-    log.info("  [3] Durva illesztés – RANSAC")
-    ransac_res = coarse_registration(
-        src_coarse, mrg_coarse, src_fpfh, mrg_fpfh, RANSAC_FEATURE_VOXEL
-    )
-
-    if ransac_res.fitness < FITNESS_THRESHOLD:
-        log.warning(
-            f"  ⚠ RANSAC fitness ({ransac_res.fitness:.4f}) < "
-            f"{FITNESS_THRESHOLD} — {label} overlap may be insufficient."
-        )
+    init_transform = np.identity(4)
 
     icp_distances = [
-        VOXEL_SIZE * 3.0,   # coarse pass
-        VOXEL_SIZE * 1.5,   # medium pass
-        VOXEL_SIZE * 0.5,   # fine pass
+        VOXEL_SIZE * 2.0, 
+        VOXEL_SIZE * 0.5,
+        VOXEL_SIZE * 0.2,
     ]
-    current_T = ransac_res.transformation
+    
+    current_T = init_transform
+    
     for pass_idx, d in enumerate(icp_distances, start=1):
         log.info(f"  [4.{pass_idx}] ICP Point-to-Plane  dist_thresh={d:.4f}")
         icp_res = fine_registration(
@@ -606,6 +607,9 @@ def full_reconstruction(ply_files: list[str]) -> tuple:
         log.info(f"\n--- [{idx}/{len(ply_files)-1}] {label} → merged ---")
 
         src = load_and_preprocess(src_file, VOXEL_SIZE)
+        if src is None:
+            continue 
+
         _prepare_normals(src)
 
         best_T, fitness = _register_scan_to_model(src, merged_pcd, label)
@@ -707,34 +711,41 @@ def full_reconstruction(ply_files: list[str]) -> tuple:
 # ─────────────────────────────────────────────────────────────────────
 
 def main() -> None:
+    global VOXEL_SIZE, NORMAL_RADIUS, FPFH_RADIUS, RANSAC_FEATURE_VOXEL, RANSAC_DIST_THRESH, ICP_DIST_THRESH
+
     log.info("Pontfelhő regisztrációs pipeline indul...")
     log.info(f"  Scan könyvtár  : {SCAN_DIR}")
     log.info(f"  Kimenet        : {OUTPUT_DIR}")
-    log.info(f"  Voxel méret    : {VOXEL_SIZE} m")
-    log.info(f"  Fitness küszöb : {FITNESS_THRESHOLD}")
-    log.info(f"  PyVista elérh. : {HAS_PYVISTA}")
 
-    # .ply fájlok felfedezése (nincs szükség .conf-ra)
     ply_files = discover_ply_files(SCAN_DIR)
-    log.info(f"  Scan-ek száma  : {len(ply_files)}")
-
     if len(ply_files) < 2:
         log.warning("  Legalább 2 .ply fájl szükséges a regisztrációhoz – pipeline leáll.")
         return
 
-    # ─────────────────────────────────────────────────────────────────
-    # Teljes multi-scan rekonstrukció (vak globális regisztráció)
-    # ─────────────────────────────────────────────────────────────────
+    test_pcd = o3d.io.read_point_cloud(ply_files[0])
+    bbox = test_pcd.get_max_bound() - test_pcd.get_min_bound()
+    max_dim = max(bbox)
+    
+    VOXEL_SIZE = max_dim * 0.02
+    
+    NORMAL_RADIUS = VOXEL_SIZE * 2
+    FPFH_RADIUS = VOXEL_SIZE * 5
+    RANSAC_FEATURE_VOXEL = VOXEL_SIZE * 2
+    RANSAC_DIST_THRESH   = RANSAC_FEATURE_VOXEL * 1.5
+    ICP_DIST_THRESH = VOXEL_SIZE * 0.4
+    
+    log.info(f"  Alap objektum max dimenzió : {max_dim:.4f} mm")
+    log.info(f"  Dinamikus Voxel méret      : {VOXEL_SIZE:.4f} mm")
+    log.info(f"  Új FPFH sugár              : {FPFH_RADIUS:.4f} mm")
+    
     merged_pcd, transforms = full_reconstruction(ply_files)
 
-    # Felülnézeti ábra a merged modellről
     plot_merged_top_view(
         merged_pcd,
         os.path.join(OUTPUT_DIR, "merged_top_view.png"),
         "Merged pontfelhő – felülnézet",
     )
 
-    # PyVista 3D render
     pyvista_render(
         [merged_pcd],
         ["#2196F3"],
@@ -744,7 +755,6 @@ def main() -> None:
 
     log.info("\n" + "=" * 65)
     log.info("  PIPELINE KÉSZ")
-    log.info(f"  Kimeneti fájlok: {OUTPUT_DIR}")
     log.info("=" * 65)
 
 
