@@ -1,183 +1,188 @@
 """
-Interaktív 3D megjelenítő – Open3D visualizer
-Irányítás:
-  Egér bal gomb  : forgatás
-  Egér jobb gomb : közelítés / távolítás
-  Egér közép     : eltolás
-  Q / Esc        : kilépés
-  R              : nézet visszaállítása
-  [, ]           : pontméret csökkentése / növelése
+Interaktív 3D pontfelhő megjelenítő
+- Fájlválasztó a .ply fájlok közül (checkbox)
+- Forgatható, zoomolható 3D nézet
+- PyVista alapú interaktív ablak
 """
 
-import sys
 import os
+import glob
+import numpy as np
 import open3d as o3d
+import pyvista as pv
+from pyvista import themes
 
+# ── Konfiguráció ──────────────────────────────────────────────────────
 WORKSPACE_DIR = os.path.dirname(os.path.abspath(__file__))
-INPUT_DIR  = os.path.join(WORKSPACE_DIR, "input", "data")
-OUTPUT_DIR = os.path.join(WORKSPACE_DIR, "output")
-OUTPUT_PLY = os.path.join(OUTPUT_DIR, "full_reconstruction.ply")
+DATA_DIR      = os.path.join(WORKSPACE_DIR, "input", "data")
+OUTPUT_DIR    = os.path.join(WORKSPACE_DIR, "output")
 
+COLORS = [
+    "#E74C3C",  # piros
+    "#3498DB",  # kék
+    "#2ECC71",  # zöld
+    "#F39C12",  # narancs
+    "#9B59B6",  # lila
+    "#1ABC9C",  # türkiz
+    "#E67E22",  # sötét narancs
+    "#34495E",  # szürke-kék
+]
 
-def build_file_list():
-    """Összeállítja a választható fájlok listáját: input .ply-ok + output rekonstrukció."""
+# ── PLY fájlok összegyűjtése ──────────────────────────────────────────
+
+def find_ply_files() -> dict:
+    """Visszaad egy {név: útvonal} szótárt az összes .ply fájlról."""
     files = {}
-    idx = 1
 
-    # Input .ply fájlok
-    if os.path.isdir(INPUT_DIR):
-        for fname in sorted(os.listdir(INPUT_DIR)):
-            if fname.lower().endswith(".ply"):
-                files[str(idx)] = (
-                    f"[Input]  {fname}",
-                    os.path.join(INPUT_DIR, fname),
-                )
-                idx += 1
+    # Input data könyvtár
+    for p in sorted(glob.glob(os.path.join(DATA_DIR, "**", "*.ply"), recursive=True)):
+        name = f"[scan] {os.path.basename(p)}"
+        files[name] = p
 
-    # Output teljes rekonstrukció
-    files[str(idx)] = (
-        "[Output] full_reconstruction.ply",
-        OUTPUT_PLY,
-    )
+    # Output könyvtár (merged/reconstructed)
+    for p in sorted(glob.glob(os.path.join(OUTPUT_DIR, "*.ply"))):
+        name = f"[output] {os.path.basename(p)}"
+        files[name] = p
 
     return files
 
 
-def colorize_by_height(pcd):
-    """Magasság szerint színezi a pontfelhőt (kék→zöld→piros)."""
-    points = pcd.get_max_bound()
-    min_z = pcd.get_min_bound()[1]
-    max_z = pcd.get_max_bound()[1]
-    import numpy as np
+# ── Betöltés ──────────────────────────────────────────────────────────
+
+def load_pcd(filepath: str) -> o3d.geometry.PointCloud | None:
+    pcd = o3d.io.read_point_cloud(filepath)
+    if len(pcd.points) == 0:
+        return None
     pts = np.asarray(pcd.points)
-    if max_z - min_z < 1e-6:
-        pcd.paint_uniform_color([0.3, 0.6, 1.0])
-        return pcd
-    t = (pts[:, 1] - min_z) / (max_z - min_z) 
-    colors = np.zeros((len(pts), 3))
-
-    mask1 = t < 0.5
-    colors[mask1, 0] = 0
-    colors[mask1, 1] = t[mask1] * 2
-    colors[mask1, 2] = 1 - t[mask1] * 2
-
-    mask2 = ~mask1
-    colors[mask2, 0] = (t[mask2] - 0.5) * 2
-    colors[mask2, 1] = 1 - (t[mask2] - 0.5) * 2
-    colors[mask2, 2] = 0
-    pcd.colors = o3d.utility.Vector3dVector(colors)
-    return pcd
+    # Korrupt pontok szűrése
+    valid = np.isfinite(pts).all(axis=1) & (np.abs(pts) < 1e6).all(axis=1)
+    pcd = pcd.select_by_index(np.where(valid)[0])
+    return pcd if len(pcd.points) > 0 else None
 
 
-def reconstruct_mesh(pcd):
-    """
-    Poisson felület-rekonstrukció a pontfelhőből.
-    Visszatér: TriangleMesh (magasság szerint színezve).
-    """
-    import numpy as np
+# ── Interaktív megjelenítő ────────────────────────────────────────────
 
-    print("  Normálisok becslése...")
-    pcd.estimate_normals(
-        o3d.geometry.KDTreeSearchParamHybrid(radius=0.01, max_nn=30)
-    )
-    pcd.orient_normals_consistent_tangent_plane(k=30)
+def launch_viewer(selected_files) -> None:
+    """PyVista interaktív ablak – forgatható, zoomolható."""
+    pl = pv.Plotter(title="3D Pontfelhő Nézegető")
+    pl.set_background(color="#1a1a2e")
 
-    print("  Poisson felület-rekonstrukció (depth=8)...")
-    mesh, densities = o3d.geometry.TriangleMesh.create_from_point_cloud_poisson(
-        pcd, depth=8
-    )
+    loaded_any = False
+    legend_entries = []
 
-    import numpy as np
-    densities = np.asarray(densities)
-    thresh = np.percentile(densities, 2)
-    verts_to_remove = densities < thresh
-    mesh.remove_vertices_by_mask(verts_to_remove)
+    for i, (name, path) in enumerate(selected_files.items()):
+        pcd = load_pcd(path)
+        if pcd is None:
+            print(f"  ⚠ Nem sikerült betölteni: {name}")
+            continue
 
-    # Magasság szerint színezés
-    pts = np.asarray(mesh.vertices)
-    min_y, max_y = pts[:, 1].min(), pts[:, 1].max()
-    if max_y - min_y > 1e-6:
-        t = (pts[:, 1] - min_y) / (max_y - min_y)
-    else:
-        t = np.zeros(len(pts))
-    colors = np.zeros((len(pts), 3))
-    mask = t < 0.5
-    colors[mask,  1] = t[mask] * 2
-    colors[mask,  2] = 1 - t[mask] * 2
-    colors[~mask, 0] = (t[~mask] - 0.5) * 2
-    colors[~mask, 1] = 1 - (t[~mask] - 0.5) * 2
-    mesh.vertex_colors = o3d.utility.Vector3dVector(colors)
+        pts = np.asarray(pcd.points)
+        color = COLORS[i % len(COLORS)]
 
-    mesh.compute_vertex_normals()
-    print(f"  Mesh: {len(mesh.vertices)} csúcs, {len(mesh.triangles)} háromszög")
-    return mesh
+        cloud = pv.PolyData(pts)
+        pl.add_points(
+            cloud,
+            color=color,
+            point_size=3,
+            render_points_as_spheres=True,
+            label=name,
+        )
 
+        legend_entries.append([name, color])
+        print(f"  ✓ Betöltve: {name}  ({len(pts)} pont)  {color}")
+        loaded_any = True
 
-def show(filepath, title):
-    if not os.path.exists(filepath):
-        print(f"[HIBA] Fájl nem található: {filepath}")
-        print("Futtasd előbb a registration_pipeline.py-t!")
+    if not loaded_any:
+        print("Nincs betöltött fájl!")
         return
 
-    print(f"\nBetöltés: {filepath}")
-    pcd = o3d.io.read_point_cloud(filepath)
-    print(f"Pontok száma: {len(pcd.points)}")
+    if legend_entries:
+        pl.add_legend(labels=legend_entries, bcolor="#00000088", border=True, size=(0.3, 0.3))
 
-    import numpy as np
-
-    is_output = os.path.abspath(filepath) == os.path.abspath(OUTPUT_PLY)
-
-    bbox = pcd.get_axis_aligned_bounding_box()
-    axis_len = max(bbox.get_max_bound() - bbox.get_min_bound()) * 0.2
-    axes = o3d.geometry.TriangleMesh.create_coordinate_frame(size=axis_len)
-
-    print("\nInteraktív ablak nyílik – irányítás:")
-    print("  Bal egér   : forgatás")
-    print("  Jobb egér  : zoom")
-    print("  Közép/scroll: eltolás / zoom")
-    print("  Q / Esc    : bezárás")
-    print("  R          : nézet visszaállítása")
-    print("  [  /  ]    : pont méret  –  /  +\n")
-
-    if is_output:
-        print("Felület-rekonstrukció folyamatban (output fájl)...")
-        geom = reconstruct_mesh(pcd)
-    else:
-        colors = np.asarray(pcd.colors)
-        if len(colors) == 0 or colors.max() < 1e-6:
-            pcd = colorize_by_height(pcd)
-        geom = pcd
-
-    o3d.visualization.draw_geometries(
-        [geom, axes],
-        window_name=title,
-        width=1280,
-        height=800,
-        mesh_show_back_face=True,
+    # Vezérlési útmutató
+    pl.add_text(
+        "Bal egér: forgatás  |  Jobb egér / scroll: zoom  |  Középső: mozgatás  |  R: reset  |  Q: kilépés",
+        position="lower_left",
+        font_size=9,
+        color="white",
     )
 
+    pl.camera.zoom(0.8)
+    pl.reset_camera()
+    pl.show()
+
+
+# ── Fájlválasztó (terminál alapú) ─────────────────────────────────────
+
+def file_selector(files: dict[str, str]) -> dict[str, str]:
+    """Terminál-alapú checkbox fájlválasztó."""
+    names = list(files.keys())
+
+    print("\n" + "=" * 60)
+    print("  3D PONTFELHŐ NÉZEGETŐ – Fájlválasztó")
+    print("=" * 60)
+    print("  Elérhető .ply fájlok:\n")
+
+    for i, name in enumerate(names):
+        print(f"  [{i+1:2d}]  {name}")
+
+    print("\n  Lehetőségek:")
+    print("    • Számok vesszővel: pl. 1,3,5")
+    print("    • Tartomány: pl. 1-4")
+    print("    • Összes: all  (vagy enter)")
+    print("    • Output merged: m")
+    print()
+
+    raw = input("  Választás: ").strip().lower()
+
+    if raw == "" or raw == "all":
+        selected_names = names
+
+    elif raw == "m":
+        selected_names = [n for n in names if "[output]" in n]
+
+    else:
+        selected_names = []
+        for part in raw.replace(" ", "").split(","):
+            if "-" in part:
+                try:
+                    a, b = part.split("-")
+                    for idx in range(int(a) - 1, int(b)):
+                        if 0 <= idx < len(names):
+                            selected_names.append(names[idx])
+                except ValueError:
+                    pass
+            else:
+                try:
+                    idx = int(part) - 1
+                    if 0 <= idx < len(names):
+                        selected_names.append(names[idx])
+                except ValueError:
+                    pass
+
+    if not selected_names:
+        print("  Nincs érvényes választás, összes fájl betöltve.")
+        selected_names = names
+
+    print(f"\n  Kiválasztva ({len(selected_names)} db):")
+    for n in selected_names:
+        print(f"    • {n}")
+    print()
+
+    return {n: files[n] for n in selected_names}
+
+
+# ── Főprogram ─────────────────────────────────────────────────────────
 
 def main():
-    print("=" * 50)
-    print("  Stanford Bunny - 3D interaktív megjelenítő")
-    print("=" * 50)
+    files = find_ply_files()
 
-    FILES = build_file_list()
+    if not files:
+        print(f"Nem található .ply fájl sem a '{DATA_DIR}', sem a '{OUTPUT_DIR}' mappában.")
+        return
 
-    if len(sys.argv) > 1:
-        choice = sys.argv[1]
-    else:
-        print("\nVálassz fájlt:")
-        for k, (name, _) in FILES.items():
-            print(f"  {k} – {name}")
-        choice = input(f"\nSzám (Enter = {max(FILES, key=int)}): ").strip() or max(FILES, key=int)
-
-    if choice not in FILES:
-        print(f"Érvénytelen választás: {choice}")
-        sys.exit(1)
-
-    title, filepath = FILES[choice]
-    show(filepath, title)
+    selected = file_selector(files)
+    launch_viewer(selected)
 
 
 if __name__ == "__main__":
