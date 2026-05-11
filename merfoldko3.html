@@ -166,58 +166,38 @@
 
       <div class="card">
         <h2>⚡ Teljesítmény</h2>
-        <table style="width: 100%; margin-top: 1rem; border-collapse: collapse">
-          <tr style="border-bottom: 1px solid #dadce0">
-            <th style="text-align: left; padding: 0.5rem">Szakasz</th>
-            <th style="text-align: right; padding: 0.5rem">Idő (s)</th>
-          </tr>
-          <tr style="border-bottom: 1px solid #dadce0">
-            <td style="padding: 0.5rem">Betöltés & Előfeldolgozás</td>
-            <td style="text-align: right; padding: 0.5rem">0.5–1.0</td>
-          </tr>
-          <tr style="border-bottom: 1px solid #dadce0">
-            <td style="padding: 0.5rem">Jellemzők Kinyerése</td>
-            <td style="text-align: right; padding: 0.5rem">1.0–1.5</td>
-          </tr>
-          <tr style="border-bottom: 1px solid #dadce0">
-            <td style="padding: 0.5rem">RANSAC Durva Illesztés</td>
-            <td style="text-align: right; padding: 0.5rem">0.5–1.0</td>
-          </tr>
-          <tr style="border-bottom: 1px solid #dadce0">
-            <td style="padding: 0.5rem">ICP Point-to-Point</td>
-            <td style="text-align: right; padding: 0.5rem">0.2–0.5</td>
-          </tr>
-          <tr style="border-bottom: 1px solid #dadce0">
-            <td style="padding: 0.5rem">ICP Point-to-Plane</td>
-            <td style="text-align: right; padding: 0.5rem">0.2–0.5</td>
-          </tr>
-          <tr style="border-bottom: 1px solid #dadce0">
-            <td style="padding: 0.5rem">Metrikák & Exportálás</td>
-            <td style="text-align: right; padding: 0.5rem">0.2–0.3</td>
-          </tr>
-          <tr style="background-color: #f0f0f0; font-weight: bold">
-            <td style="padding: 0.5rem">ÖSSZESEN</td>
-            <td style="text-align: right; padding: 0.5rem">2.5–5.0</td>
-          </tr>
-        </table>
+        <p><strong>Feldolgozási idő a saját modellen:</strong></p>
+        <p
+          style="
+            margin-top: 1rem;
+            font-size: 0.95rem;
+            color: var(--text-secondary);
+          "
+        >
+          A teljes regisztrációs pipeline összesen
+          <strong>&lt; 5 másodperc</strong> alatt fut le. Az egyes feldolgozási
+          szakaszok időigénye az objektum méretétől és a pontfelhő sűrűségétől
+          függ.
+        </p>
       </div>
 
       <div class="card">
-        <h2>📈 Eredmények</h2>
+        <h2>📈 Eredmények — Saját Modell</h2>
+        <p><strong>Pipeline teljesítménye:</strong></p>
         <ul style="margin-left: 1.5rem">
           <li>
-            <strong>Robusztusság:</strong> Összes 10 szken hibamentes
-            feldolgozása
+            <strong>Robusztusság:</strong> 6 scanből 5 sikeresen illeszkedett
+            (4. scan sérült adat miatt)
+          </li>
+          <li><strong>Fitness értékek:</strong> 0.40–0.60 között</li>
+          <li><strong>RMSE (mm):</strong> 1.3–1.4 mm között</li>
+          <li>
+            <strong>Feldolgozási idő:</strong> &lt; 5 másodperc az egész
+            pipeline-hez
           </li>
           <li>
-            <strong>Regisztrációs pontosság:</strong> 95%+ fitness értékek
-          </li>
-          <li>
-            <strong>Számítási hatékonyság:</strong> 2–5 perc/teljes dataset
-          </li>
-          <li>
-            <strong>Vizualizáció:</strong> Interaktív 3D megjelenítő valós idejű
-            kontrolllal
+            <strong>Végső rekonstrukció:</strong> 3146 pont (427,980 pontból,
+            0,74% sűrítési arány)
           </li>
         </ul>
       </div>
@@ -236,20 +216,9 @@
           >
             LaTeX dokumentumban
           </a>
-          érhető el, amely matematikai formulákat, kódpéldákat és részletes
-          algoritmusleírásokat tartalmaz.
+          érhető el, amely matematikai formulákat, technikai részleteket és
+          részletes algoritmusleírásokat tartalmaz.
         </p>
-      </div>
-
-      <div class="card">
-        <h2>🔮 Jövőbeli Fejlesztések</h2>
-        <ul style="margin-left: 1.5rem">
-          <li>Globális multí-view illesztés (pose graph optimization)</li>
-          <li>Loop closure detekció</li>
-          <li>GPU akceleráció (CUDA/OpenCL)</li>
-          <li>Valós idejű feldolgozás (incremental regisztráció)</li>
-          <li>Webes interfész nagy adathalmazokhoz</li>
-        </ul>
       </div>
     </div>
 

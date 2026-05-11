@@ -1,0 +1,370 @@
+\documentclass[12pt,a4paper]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[hungarian]{babel}
+\usepackage{geometry}
+\geometry{margin=2.5cm}
+\usepackage{graphicx}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{bookmark}
+\usepackage{xcolor}
+\usepackage{listings}
+\usepackage{amsmath}
+\usepackage{float}
+\usepackage{enumitem}
+\usepackage[hidelinks]{hyperref}
+
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue!60!black,
+    urlcolor=blue!60!black,
+    citecolor=blue!60!black,
+}
+
+\lstset{
+    basicstyle=\ttfamily\small,
+    keywordstyle=\color{blue!70!black}\bfseries,
+    commentstyle=\color{green!50!black}\itshape,
+    stringstyle=\color{red!60!black},
+    backgroundcolor=\color{gray!8},
+    frame=single,
+    framerule=0.4pt,
+    rulecolor=\color{gray!50},
+    breaklines=true,
+    showstringspaces=false,
+    numbers=left,
+    numberstyle=\tiny\color{gray},
+    language=Python,
+    tabsize=4,
+}
+
+\title{
+    \textbf{Ipari Képfeldolgozás Laboratóriumi Gyakorlat} \\[0.3cm]
+    \Large 3.~Mérföldkő — Végleges Algoritmus \& Eredmények \\[0.3cm]
+    \large Projekt: Objektumok regisztrációja 3D pontfelhőn
+}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+\thispagestyle{empty}
+
+\vspace{-1.5cm}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{ll}
+\toprule
+\textbf{Beadási határidő} & 2026.~május 15.~23:59 \\
+\textbf{Csapat tagjai}     & Ilonczai András \\
+\textbf{Dátum}             & 2026.~május \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+% ============================================================
+\section{Projekt összefoglalás és végső státusz}
+% ============================================================
+
+Az 1.~és 2.~mérföldkövek alapján a 3D pontfelhő regisztrációs pipeline teljes implementációja megtörtént és optimalizálásra került. A legújabb fejlesztések a robusztusság javítására és az interaktív vizualizáció kiegészítésére összpontosítottak, melyek az alábbi kérdéseket oldják meg:
+
+\begin{itemize}[nosep]
+    \item \textbf{Regisztrációs robusztusság:} Dinamikus paraméter hangolás a különböző pontfelhő karakterisztikák kezelésére
+    \item \textbf{Vizualizáció:} PyVista-alapú interaktív 3D megjelenítő fájlválasztó funkcionalitással
+    \item \textbf{Felhasználói élmény:} Intuitív terminál-alapú felület az eredmények megtekintéséhez
+\end{itemize}
+
+A végleges rendszer megbízható regisztrációt biztosít különféle 3D pontfelhő adathalmazokra, amit egy saját modellon végzett tesztelés is igazolt.
+
+% ============================================================
+\section{Végleges algoritmus}
+% ============================================================
+
+Az előző mérföldkövekben bemutatott hat-lépéses pipeline az alábbiak szerint lett finalizálva és optimalizálva:
+
+\subsection{Pipeline architektúra — végső verzió}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{clp{8cm}}
+\toprule
+\textbf{Lépés} & \textbf{Megnevezés} & \textbf{Finalizálás \& Javítások} \\
+\midrule
+1 & Adatbevitel \& előfeldolgozás & Robusztus hiba-kezelés, geometriai validáció \\
+2 & Jellemzők kinyerése & Stabil normális becslés, hibrid keresési paraméterek \\
+3 & Durva illesztés (RANSAC) & Dinamikus max\_iter, konfidencia tuning \\
+4 & Finom illesztés (ICP) & Point-to-Point és Point-to-Plane variánsok \\
+5 & Minőségértékelés & Fitness, RMSE, korespondenciák száma \\
+6 & Eredmény exportálás & PLY, JSON transzformációk, vizualizáció \\
+\bottomrule
+\end{tabular}
+\caption{A pipeline végső hat feldolgozási lépése optimalizálásokkal.}
+\end{table}
+
+\subsection{Regisztrációs robusztusság javítása}
+
+A regisztrációs algoritmus robusztusságának javítása érdekében a következő módosítások történtek:
+
+\begin{enumerate}[nosep]
+    \item \textbf{Dinamikus paraméter hangolás:} A RANSAC és ICP paraméterek az aktuális pontfelhő jellemzői alapján dinamikusan állítódnak be.
+    \item \textbf{Kiterjesztett hiba-kezelés:} Geometriai validáció az előfeldolgozás során:
+        \begin{itemize}
+            \item Üres pontfelhőket kezel
+            \item Hibás pontokat szűr
+            \item Extrém kiterjedést detektál
+        \end{itemize}
+    \item \textbf{Optimalizált Statistical Outlier Removal:} 20 szomszéd, $2\sigma$ küszöbérték az izolált pontok eltávolítására.
+    \item \textbf{Konzisztens normális orientáció:} A normálisok \texttt{orient\_normals\_consistent\_tangent\_plane(k=30)} módszerrel konzisztensek.
+    \item \textbf{Adaptív ICP küszöbök:} Az ICP correspondence distance threshold dinamikusan számítódik a voxel size-tól.
+\end{enumerate}
+
+\subsection{Interaktív vizualizáció PyVista alapokkal}
+
+Az interaktív vizualizáció teljes átalakítása PyVista alapokkal:
+
+\begin{enumerate}[nosep]
+    \item \textbf{PyVista 3D megjelenítő:} Off-screen és interaktív renderelési módok támogatása.
+    \item \textbf{Interaktív vezérlés:}
+        \begin{itemize}
+            \item \textbf{Bal egér:} Forgatás
+            \item \textbf{Jobb egér / scroll:} Zoom
+            \item \textbf{Középső gomb:} Mozgatás
+            \item \textbf{R billentyű:} Kamera reset
+            \item \textbf{Q billentyű:} Kilépés
+        \end{itemize}
+    \item \textbf{Fájlválasztó interface:}
+        \begin{itemize}
+            \item Terminál-alapú checkbox rendszer
+            \item Támogatott formátumok: számok (1,3,5), tartományok (1-4), összes (all), output merged (m)
+            \item Dinamikus legenda a megjelenített fájlok szerint
+        \end{itemize}
+    \item \textbf{Szín-kódolás:} Nyolc előre definiált szín az egyidejűleg megjeleníthető pontfelhőkhöz.
+    \item \textbf{Valós idejű hibajelzés:} Korrupt vagy nem betölthető fájlok kezelése.
+\end{enumerate}
+
+% ============================================================
+\section{Technikai megvalósítás}
+% ============================================================
+
+\subsection{Adatbevitel és robusztus előfeldolgozás}
+
+Az előfeldolgozás során a következő robusztusságjavítások történtek:
+
+\begin{itemize}[nosep]
+    \item \textbf{Betöltés és validáció:} Open3D pontfelhő betöltése és alapvető ellenőrzés
+    \item \textbf{Hibás pontok eltávolítása:} Non-finite pontok szűrése, Statistical Outlier Removal (20 szomszéd, $2\sigma$ küszöbérték)
+    \item \textbf{Geometriai validáció:} Az objektum kiterjedésének ellenőrzése (üres vagy extrém nagy pontfelhő detektálása)
+    \item \textbf{Voxel downsampling:} A pontfelhő ritkítása a megadott voxel méret szerint
+\end{itemize}
+
+\subsection{Jellemző kinyerés — normálisok és FPFH}
+
+Az optimalizált jellemző kinyerés a következő lépésekből áll:
+
+\begin{itemize}[nosep]
+    \item \textbf{Normális becslés:} PCA-alapú módszer hibrid keresési paraméterekkel (sugár: 2 × VOXEL\_SIZE, max 30 szomszéd)
+    \item \textbf{Konzisztens orientáció:} Normálisok orientálása konzisztens tangent plane módszerrel
+    \item \textbf{FPFH deszkriptorok:} Fast Point Feature Histograms számítása (33 dimenziós), keresési sugár: 5 × VOXEL\_SIZE
+\end{itemize}
+
+\subsection{Durva illesztés — Dinamikus RANSAC}
+
+A RANSAC algoritmus dinamikus paraméterezésű verzióval működik:
+
+\begin{table}[H]
+\centering
+\begin{tabular}{ll}
+\toprule
+\textbf{Paraméter} & \textbf{Végső érték / Szabály} \\
+\midrule
+Távolság küszöb & $1{,}5 \times \text{VOXEL\_SIZE}$ \\
+Maximális iteráció & 200\,000 -- 200\,000 (dinamikus) \\
+Konfidencia & 0{,}9999 (99{,}99\%) \\
+Minta pontok & 3 \\
+Edge length checker & $\geq 0{,}9$ \\
+\bottomrule
+\end{tabular}
+\caption{RANSAC végső paraméterezése.}
+\end{table}
+
+\subsection{Finom illesztés — Adaptív ICP}
+
+Az ICP két variánsban áll rendelkezésre, dinamikus küszöbökkel:
+
+\paragraph{Point-to-Point ICP:}
+\[
+E(\mathbf{R}, \mathbf{t}) = \sum_{i=1}^{N} \| \mathbf{R} \mathbf{p}_i + \mathbf{t} - \mathbf{q}_i \|^2
+\]
+
+\paragraph{Point-to-Plane ICP:}
+\[
+E(\mathbf{R}, \mathbf{t}) = \sum_{i=1}^{N} \left[ (\mathbf{R} \mathbf{p}_i + \mathbf{t} - \mathbf{q}_i) \cdot \mathbf{n}_i \right]^2
+\]
+
+\begin{table}[H]
+\centering
+\begin{tabular}{ll}
+\toprule
+\textbf{Paraméter} & \textbf{Végső érték} \\
+\midrule
+Távolság küszöb (RANSAC után) & $0{,}4 \times \text{VOXEL\_SIZE}$ \\
+Maximális iteráció & 200 \\
+Relatív fitness konvergencia & $10^{-6}$ \\
+Relatív RMSE konvergencia & $10^{-6}$ \\
+\bottomrule
+\end{tabular}
+\caption{ICP végső paraméterezése.}
+\end{table}
+
+% ============================================================
+\section{Vizualizáció — Interaktív 3D megjelenítő}
+% ============================================================
+
+A vizualizációs rendszer teljes átalakítására került PyVista alapokra.
+
+\subsection{Interaktív megjlenítő főbb funkciói}
+
+Az alábbi fejlesztések történtek a vizualizáció terén:
+
+\begin{itemize}[nosep]
+    \item \textbf{Off-screen renderelés:} Batch feldolgozáshoz és automatikus riportok generálásához
+    \item \textbf{Interaktív ablak:} Valós idejű forgatás, zoom, mozgatás
+    \item \textbf{Fényviszonyok:} Professzionális megvilágítás és szín-kódolás
+    \item \textbf{Legenda:} Automatikus szín-azonosítás az egyes pontfelhőkhöz
+    \item \textbf{Vezérlési útmutató:} Beépített help az interaktív módban
+\end{itemize}
+
+% ============================================================
+\section{Eredmények és Értékelés}
+% ============================================================
+
+\subsection{Saját modell — végső regisztrációs eredmények}
+
+A fejlesztett pipeline tesztelése egy saját 3D modellon történt, amely 6 felvételből (a1\_0.ply -- a6\_0.ply) állt. Az objektum maximális dimenziója 131.6121~mm volt, amelyből a pipeline dinamikusan számított voxel méret (2.6322~mm) alapján egy 3146 pontból álló végső rekonstrukciót hozott létre.
+
+\subsubsection{Regisztrációs eredmények}
+
+A pipeline öt scan-t sikeresen illesztett össze az alábbi metrikákkal:
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lrr}
+\toprule
+\textbf{Scan} & \textbf{Fitness} & \textbf{RMSE (mm)} \\
+\midrule
+a2\_0.ply & 0.5102 & 1.330 \\
+a3\_0.ply & 0.4045 & 1.370 \\
+a5\_0.ply & 0.4827 & 1.302 \\
+a6\_0.ply & 0.5970 & 1.279 \\
+\bottomrule
+\end{tabular}
+\caption{Regisztrációs metrikák scan-ként.}
+\end{table}
+
+A regisztrációs folyamat során:
+
+\begin{enumerate}[nosep]
+    \item \textbf{Robusztusság:} 6 scanből 5 sikeresen illeszkedett (a4\_0.ply sérült adat miatt elvetve, majd a5 retry-val újra feldolgozva)
+    \item \textbf{Regisztrációs pontosság:} Fitness értékek 0.40 -- 0.60 között, RMSE 1.3 -- 1.4 mm között
+    \item \textbf{Számítási hatékonyság:} Teljes pipeline $< 5$ másodperc alatt lefutott
+    \item \textbf{Dinamikus paraméterezés:} A pipeline automatikusan alkalmazkodott az objektum méretéhez (VOXEL\_SIZE = 2.6322~mm, FPFH sugár = 13.1612~mm)
+\end{enumerate}
+
+\subsubsection{Végső 3D modell karakterisztikái}
+
+A fusion után a végső pontfelhő 3146 pontot tartalmazott, amely az eredeti 6 scan összesen 427\,980 pontjából lett előállítva ($0{,}74\%$ sűrítési arány). Az előfeldolgozási lépések során:
+
+\begin{itemize}[nosep]
+    \item Összesen 8\,550 outlier pont lett eltávolítva
+    \item Voxel downsampling után 6--15\% a pontok száma
+    \item Statistical Outlier Removal (SOR) 2\% -- 4\% közötti eltávolítást eredményezett
+\end{itemize}
+
+\subsection{Metrikák értelmezése}
+
+\begin{table}[H]
+\centering
+\begin{tabular}{ll}
+\toprule
+\textbf{Metrika} & \textbf{Magyarázat} \\
+\midrule
+Fitness & Illeszkedő pontok aránya (0 = 0\%, 1 = 100\%) \\
+Inlier RMSE & Root Mean Square Error az illeszkedő pontokon (m) \\
+\#Correspondences & Az illeszkedő pontpárok száma \\
+\bottomrule
+\end{tabular}
+\caption{Regisztrációs metrikák értelmezése.}
+\end{table}
+
+\subsection{Teljesítményprofil}
+
+Egy tipikus regisztrációs páron mért időidőpontok:
+
+\begin{table}[H]
+\centering
+\begin{tabular}{lr}
+\toprule
+\textbf{Szakasz} & \textbf{Idő (s)} \\
+\midrule
+Betöltés \& előfeldolgozás & 0.5--1.0 \\
+Jellemzők kinyerése & 1.0--1.5 \\
+RANSAC durva illesztés & 0.5--1.0 \\
+ICP Point-to-Point & 0.2--0.5 \\
+ICP Point-to-Plane & 0.2--0.5 \\
+Metrikák \& exportálás & 0.2--0.3 \\
+\midrule
+\textbf{ÖSSZESEN} & \textbf{2.5--5.0} \\
+\bottomrule
+\end{tabular}
+\caption{Tipikus feldolgozási idők.}
+\end{table}
+
+\section{Projekt weboldal}
+% ============================================================
+
+A projekt haladása egy dedikált weboldalon követhető, mérföldkőnként elkülönítve:
+
+\begin{itemize}[nosep]
+    \item \textbf{1.~mérföldkő:} Algoritmus terv és költségbecslés
+    \item \textbf{2.~mérföldkő:} Kezdeti implementáció és első eredmények
+    \item \textbf{3.~mérföldkő:} Végleges eredmények és értékelés (jelen dokumentum)
+\end{itemize}
+
+\textbf{Weboldal URL:} \url{https://ilonczai-andras.github.io/Industrial-image-processing-webpage/index.html}
+
+% ============================================================
+\begin{thebibliography}{9}
+\bibitem{besl1992}
+Besl, P.~J. \& McKay, N.~D. (1992).
+A method for registration of 3-D shapes.
+\textit{IEEE TPAMI}, 14(2), 239--256.
+
+\bibitem{rusu2009}
+Rusu, R.~B., Blodow, N. \& Beetz, M. (2009).
+Fast point feature histograms (FPFH) for 3D registration.
+\textit{IEEE ICRA}, 3212--3217.
+
+\bibitem{zhou2016}
+Zhou, Q.-Y., Park, J. \& Koltun, V. (2016).
+Fast global registration.
+\textit{ECCV}, 766--782.
+
+\bibitem{chen1992}
+Chen, Y. \& Medioni, G. (1992).
+Object modelling by registration of multiple range images.
+\textit{Image and Vision Computing}, 10(3), 145--155.
+
+\bibitem{open3d2018}
+Zhou, Q.-Y., Park, J. \& Koltun, V. (2018).
+Open3D: A modern library for 3D data processing.
+\textit{arXiv:1801.09847}.
+\end{thebibliography}
+
+\vfill
+\noindent\rule{\textwidth}{0.4pt}\\
+\small\textit{Ipari Képfeldolgozás Lab.\ Gyak.\ | 2.~Mérföldkő | 2026.~április}
+
+\end{document}

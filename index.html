@@ -246,14 +246,15 @@
             A projekt célja 3D pontfelhők alapján történő objektum-regisztráció
             és illesztés megvalósítása. A regisztráció során két vagy több,
             különböző nézőpontból felvett pontfelhőt illesztünk össze egyetlen
-            koherens háromdimenziós modellé. A folyamat durva (coarse) és finom
-            (fine) illesztésből áll.
+            koherens háromdimenziós modellé. A folyamat durva (coarse)
+            illesztésből (RANSAC) és finom (fine) illesztésből (ICP) áll.
           </p>
           <p style="margin-top: 0.5rem">
             A pontfelhő-regisztráció számos iparági alkalmazásban
             kulcsfontosságú: minőségellenőrzés, reverz tervezés (reverse
-            engineering), robotikai navigáció. A pipeline a Stanford Bunny
-            adathalmazon kerül demonstrálásra (10 scan, 360° lefedettség).
+            engineering), robotikai navigáció, 3D modellezés. A pipeline öt
+            saját 3D felvétel (6 scan) regisztrációján kerül demonstrálásra,
+            végül egy 3146 pontból álló koherens 3D modellet létrehozva.
           </p>
 
           <div class="pipeline-steps">
@@ -306,7 +307,7 @@
           </a>
 
           <a href="merfoldko2.html" class="milestone-card">
-            <span class="status status-current">● Aktuális</span>
+            <span class="status status-done">✓ Kész</span>
             <h3>2. Mérföldkő</h3>
             <p><strong>Kezdeti implementáció &amp; első eredmények</strong></p>
             <p
@@ -331,9 +332,11 @@
           </a>
 
           <a href="merfoldko3.html" class="milestone-card">
-            <span class="status status-upcoming">○ Következő</span>
+            <span class="status status-done">✓ Kész</span>
             <h3>3. Mérföldkő</h3>
-            <p><strong>Végleges eredmények &amp; értékelés</strong></p>
+            <p>
+              <strong>Végleges algoritmus &amp; tesztelési eredmények</strong>
+            </p>
             <p
               style="
                 color: var(--text-secondary);
@@ -341,8 +344,8 @@
                 margin-top: 0.5rem;
               "
             >
-              Globális optimalizáció, több adathalmaz, paraméter-elemzés, végső
-              eredmények összehasonlítása.
+              Pipeline finalizálása, dinamikus paraméterezés, PyVista
+              vizualizáció, saját modellen végzett tesztelés és értékelés.
             </p>
             <p
               style="
@@ -351,7 +354,7 @@
                 margin-top: 0.5rem;
               "
             >
-              📅 2026. május (tervezett)
+              📅 2026. május
             </p>
           </a>
         </div>
