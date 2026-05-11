@@ -1,0 +1,482 @@
+<!doctype html>
+<html lang="hu">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>1. Mérföldkő – Algoritmus Terv &amp; Költségbecslés</title>
+    <style>
+      :root {
+        --primary: #1a73e8;
+        --primary-dark: #1557b0;
+        --bg: #f8f9fa;
+        --card-bg: #ffffff;
+        --text: #202124;
+        --text-secondary: #5f6368;
+        --border: #dadce0;
+      }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.6;
+      }
+      header {
+        background: linear-gradient(
+          135deg,
+          var(--primary),
+          var(--primary-dark)
+        );
+        color: white;
+        padding: 2rem;
+        text-align: center;
+      }
+      header h1 {
+        font-size: 1.6rem;
+        margin-bottom: 0.3rem;
+      }
+      header p {
+        opacity: 0.9;
+      }
+      .container {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 2rem 1.5rem;
+      }
+      .back-link {
+        display: inline-block;
+        margin-bottom: 1.5rem;
+        color: var(--primary);
+        text-decoration: none;
+        font-weight: 600;
+      }
+      .back-link:hover {
+        text-decoration: underline;
+      }
+      section {
+        margin-bottom: 2rem;
+      }
+      h2 {
+        font-size: 1.3rem;
+        margin-bottom: 0.8rem;
+        padding-bottom: 0.3rem;
+        border-bottom: 2px solid var(--primary);
+        display: inline-block;
+      }
+      h3 {
+        font-size: 1.1rem;
+        margin: 1rem 0 0.5rem;
+        color: var(--primary-dark);
+      }
+      .card {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 1.5rem;
+        margin-bottom: 1rem;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 0.5rem;
+      }
+      th,
+      td {
+        padding: 0.5rem 0.8rem;
+        text-align: left;
+        border-bottom: 1px solid var(--border);
+      }
+      th {
+        background: var(--bg);
+        font-weight: 600;
+      }
+      ul,
+      ol {
+        padding-left: 1.5rem;
+      }
+      li {
+        margin-bottom: 0.3rem;
+      }
+      footer {
+        text-align: center;
+        padding: 2rem;
+        color: var(--text-secondary);
+        font-size: 0.85rem;
+        border-top: 1px solid var(--border);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>1. Mérföldkő — Algoritmus Terv &amp; Költségbecslés</h1>
+      <p>Objektumok regisztrációja 3D pontfelhőn</p>
+    </header>
+
+    <div class="container">
+      <a href="index.html" class="back-link">← Vissza a főoldalra</a>
+
+      <section>
+        <h2>Projekt áttekintés</h2>
+        <div class="card">
+          <p>
+            A projekt célja 3D pontfelhők alapján történő objektum-regisztráció
+            és illesztés megvalósítása. A regisztráció során két vagy több,
+            különböző nézőpontból felvett pontfelhőt illesztünk össze egyetlen
+            koherens háromdimenziós modellé. A folyamat alapvetően két lépésből
+            áll: durva (<em>coarse</em>) és finom (<em>fine/dense</em>)
+            illesztésből.
+          </p>
+          <p style="margin-top: 0.8rem">
+            A pontfelhő-regisztráció számos iparági alkalmazásban
+            kulcsfontosságú, beleértve a minőségellenőrzést, a reverz tervezést
+            (<em>reverse engineering</em>) és a robotikai navigációt. A projekt
+            eredménye egy olyan pipeline lesz, amely képes automatikusan
+            illeszteni többszörös szkennelésből származó pontfelhőket.
+          </p>
+        </div>
+      </section>
+
+      <section>
+        <h2>Feldolgozási pipeline</h2>
+        <div class="card">
+          <ol>
+            <li>
+              <strong>Adatbevitel &amp; előfeldolgozás</strong> — Nyers
+              pontfelhők beolvasása, zajszűrés (<em
+                >Statistical Outlier Removal</em
+              >, <em>Radius Outlier Removal</em>), voxel grid alapú ritkítás
+              (<em>downsampling</em>) a számítási igény csökkentéséhez.
+            </li>
+            <li>
+              <strong>Jellemzők kinyerése (<em>Feature Extraction</em>)</strong>
+              — Normal becslés (PCA alapú), FPFH (<em
+                >Fast Point Feature Histograms</em
+              >) vagy SHOT deszkriptorok alkalmazása kulcspontokhoz.
+            </li>
+            <li>
+              <strong>Durva illesztés (<em>Coarse Registration</em>)</strong> —
+              RANSAC alapú kezdeti transzformáció becslése a leíró jellemzők
+              alapján. Célja: megközelítőleg helyes elhelyezés biztosítása a
+              finom illesztés számára.
+            </li>
+            <li>
+              <strong
+                >Finom illesztés (<em>Fine Registration</em> — ICP)</strong
+              >
+              — <em>Iterative Closest Point</em> (ICP) algoritmus alkalmazása a
+              durva illesztés eredményére. Variánsok:
+              <em>Point-to-Point</em> ICP, <em>Point-to-Plane</em> ICP.
+              Konvergencia-kritérium: RMSE küszöbérték vagy max. iterációs szám.
+            </li>
+            <li>
+              <strong>Minőségértékelés</strong> — Az illesztés pontosságának
+              mérése: RMSE (<em>Root Mean Square Error</em>), overlap arány,
+              vizuális ellenőrzés. Iteratív finomítás szükség esetén.
+            </li>
+            <li>
+              <strong>Eredmény exportálás</strong> — Összefűzött pontfelhő
+              mentése (<code>.ply</code>, <code>.pcd</code> formátumban),
+              transzformációs mátrixok naplózása.
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <section>
+        <h2>ICP algoritmus</h2>
+        <div class="card">
+          <p>
+            Az ICP (<em>Iterative Closest Point</em>) a pontfelhő-regisztráció
+            egyik legelterjedtebb algoritmusa (Besl &amp; McKay, 1992). Az
+            algoritmus iteratívan minimalizálja a forrás- és célpontfelhő
+            közötti távolságot:
+          </p>
+          <ol style="margin-top: 0.5rem">
+            <li>
+              Minden forrásponthoz megkeressük a legközelebbi célpontot (<em
+                >nearest neighbor search</em
+              >, pl. KD-fa).
+            </li>
+            <li>
+              Kiszámítjuk az optimális forgatási (<strong>R</strong>) és
+              eltolási (<strong>t</strong>) transzformációt (SVD alapú zárt
+              megoldás).
+            </li>
+            <li>Alkalmazzuk a transzformációt a forráspontfelhőre.</li>
+            <li>
+              Az RMSE konvergál, vagy elérjük a maximális iterációszámot →
+              leállás.
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <section>
+        <h2>RANSAC globális regisztráció</h2>
+        <div class="card">
+          <p>
+            A RANSAC (<em>Random Sample Consensus</em>) algoritmust FPFH
+            jellemzőkkel kombinálva alkalmazzuk a kezdeti transzformáció
+            becslésére. Az FPFH jellemzők 33 dimenziós hisztogramban foglalják
+            össze egy pont <em>k</em>-szomszédsági geometriáját, ami robusztus
+            egyeztetést tesz lehetővé. A módszert Zhou et al. (2016) nyílt
+            forráskódú implementációként is elérhetővé tette az Open3D
+            könyvtárban.
+          </p>
+        </div>
+      </section>
+
+      <section>
+        <h2>Szoftvereszközök</h2>
+        <div class="card">
+          <table>
+            <tr>
+              <th>Eszköz</th>
+              <th>Verzió</th>
+              <th>Felhasználás</th>
+            </tr>
+            <tr>
+              <td>Python</td>
+              <td>3.10+</td>
+              <td>Fő programozási nyelv</td>
+            </tr>
+            <tr>
+              <td>Open3D</td>
+              <td>0.18</td>
+              <td>Pontfelhő I/O, ICP, RANSAC, vizualizáció</td>
+            </tr>
+            <tr>
+              <td>NumPy</td>
+              <td>1.26</td>
+              <td>Numerikus számítások, mátrixműveletek</td>
+            </tr>
+            <tr>
+              <td>SciPy</td>
+              <td>1.12</td>
+              <td>KD-fa, lineáris algebra</td>
+            </tr>
+            <tr>
+              <td>Matplotlib</td>
+              <td>3.8</td>
+              <td>Eredmények vizualizációja, ábrázolás</td>
+            </tr>
+            <tr>
+              <td>PyVista</td>
+              <td>0.43</td>
+              <td>Interaktív 3D vizualizáció</td>
+            </tr>
+            <tr>
+              <td>CloudCompare</td>
+              <td>2.13</td>
+              <td>Referencia-szoftver, manuális ellenőrzés</td>
+            </tr>
+          </table>
+        </div>
+      </section>
+
+      <section>
+        <h2>Szakirodalmi áttekintés</h2>
+        <div class="card">
+          <ol>
+            <li>
+              Besl, P. J., &amp; McKay, N. D. (1992). A method for registration
+              of 3-D shapes.
+              <em
+                >IEEE Transactions on Pattern Analysis and Machine
+                Intelligence</em
+              >, 14(2), 239–256.
+            </li>
+            <li>
+              Rusu, R. B., Blodow, N., &amp; Beetz, M. (2009). Fast point
+              feature histograms (FPFH) for 3D registration. <em>IEEE ICRA</em>,
+              3212–3217.
+            </li>
+            <li>
+              Zhou, Q.-Y., Park, J., &amp; Koltun, V. (2016). Fast global
+              registration. <em>ECCV</em>, 766–782.
+            </li>
+            <li>
+              Chen, Y., &amp; Medioni, G. (1992). Object modelling by
+              registration of multiple range images.
+              <em>Image and Vision Computing</em>, 10(3), 145–155.
+            </li>
+            <li>
+              Zhou, Q.-Y., Park, J., &amp; Koltun, V. (2018). Open3D: A modern
+              library for 3D data processing. <em>arXiv:1801.09847</em>.
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <section>
+        <h2>Csapattagok és feladatkiosztás</h2>
+        <div class="card">
+          <table>
+            <tr>
+              <th>Csapattag</th>
+              <th>Feladat</th>
+              <th>Mérföldkő</th>
+            </tr>
+            <tr>
+              <td>Ilonczai András</td>
+              <td>
+                Algoritmus terv, szakirodalom feldolgozás, ICP implementáció.
+                Költségbecslés, RANSAC implementáció, eredmény kiértékelés.
+              </td>
+              <td>1., 2., 3.</td>
+            </tr>
+          </table>
+        </div>
+      </section>
+
+      <section>
+        <h2>Költségbecslés</h2>
+
+        <h3>Hardverköltségek</h3>
+        <div class="card">
+          <table>
+            <tr>
+              <th>Eszköz</th>
+              <th>Leírás</th>
+              <th>Becsült ár (USD)</th>
+              <th>Megjegyzés</th>
+            </tr>
+            <tr>
+              <td>NextEngine 3D Scanner HD</td>
+              <td>
+                Nagy felbontású asztali 3D szkenner, 50–200 mikron pontosság, 2
+                lézercsík
+              </td>
+              <td>2 995</td>
+              <td>Laborban rendelkezésre áll</td>
+            </tr>
+            <tr>
+              <td>Számítógép (munkaállomás)</td>
+              <td>Intel Core i7/i9, 32 GB RAM, NVIDIA RTX 3060+ GPU</td>
+              <td>1 500–2 500</td>
+              <td>Laborban elérhető</td>
+            </tr>
+            <tr>
+              <td>Forgóasztal / tartójig</td>
+              <td>Objektum rögzítéséhez szkennelés közben</td>
+              <td>50–150</td>
+              <td>Laborban elérhető</td>
+            </tr>
+            <tr>
+              <td>Kalibrációs lap</td>
+              <td>NextEngine kalibráló célpont</td>
+              <td>~50</td>
+              <td>Szkennerhez tartozik</td>
+            </tr>
+            <tr style="font-weight: 600">
+              <td colspan="2">HW részösszeg (ha megvásárolnánk):</td>
+              <td colspan="2">~4 595–5 695 USD</td>
+            </tr>
+          </table>
+        </div>
+
+        <h3>Szoftverköltségek</h3>
+        <div class="card">
+          <table>
+            <tr>
+              <th>Szoftver</th>
+              <th>Licensz típus</th>
+              <th>Ár / év (USD)</th>
+              <th>Megjegyzés</th>
+            </tr>
+            <tr>
+              <td>Python 3.10+</td>
+              <td>Nyílt forráskód (PSF)</td>
+              <td>0</td>
+              <td>Ingyenes</td>
+            </tr>
+            <tr>
+              <td>Open3D 0.18</td>
+              <td>MIT License</td>
+              <td>0</td>
+              <td>Ingyenes</td>
+            </tr>
+            <tr>
+              <td>NumPy / SciPy / Matplotlib</td>
+              <td>BSD License</td>
+              <td>0</td>
+              <td>Ingyenes</td>
+            </tr>
+            <tr>
+              <td>PyVista</td>
+              <td>MIT License</td>
+              <td>0</td>
+              <td>Ingyenes</td>
+            </tr>
+            <tr>
+              <td>CloudCompare 2.13</td>
+              <td>GNU GPL v2</td>
+              <td>0</td>
+              <td>Ingyenes</td>
+            </tr>
+            <tr>
+              <td>ScanStudio HD (NextEngine)</td>
+              <td>Kereskedelmi (szkennerhez jár)</td>
+              <td>0</td>
+              <td>Szkenner szoftver</td>
+            </tr>
+            <tr>
+              <td>Jupyter Notebook / VS Code</td>
+              <td>MIT / Ingyenes</td>
+              <td>0</td>
+              <td>Fejlesztői környezet</td>
+            </tr>
+            <tr style="font-weight: 600">
+              <td colspan="2">SW részösszeg:</td>
+              <td colspan="2">0 USD (minden szoftver ingyenes)</td>
+            </tr>
+          </table>
+        </div>
+
+        <h3>Összesített költségbecslés</h3>
+        <div class="card">
+          <table>
+            <tr>
+              <th>Kategória</th>
+              <th>Becsült költség (USD)</th>
+              <th>Megjegyzés</th>
+            </tr>
+            <tr>
+              <td>Hardver (szkenner + PC)</td>
+              <td>4 595–5 695</td>
+              <td>Laborban rendelkezésre áll</td>
+            </tr>
+            <tr>
+              <td>Szoftver (összes eszköz)</td>
+              <td>0</td>
+              <td>Nyílt forráskódú / ingyenes</td>
+            </tr>
+            <tr>
+              <td>Egyéb (kalibrációs testek, stb.)</td>
+              <td>~50–100</td>
+              <td>Opcionális</td>
+            </tr>
+            <tr style="font-weight: 600">
+              <td>ÖSSZESEN (ha nulláról vennénk)</td>
+              <td>~4 645–5 795 USD</td>
+              <td></td>
+            </tr>
+            <tr style="font-weight: 600">
+              <td>Tényleges projektköltség</td>
+              <td>~0 USD</td>
+              <td>Labor infrastruktúra</td>
+            </tr>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <footer>
+      Ipari Képfeldolgozás Lab. Gyak. | 1. Mérföldkő | 2026. március
+    </footer>
+  </body>
+</html>

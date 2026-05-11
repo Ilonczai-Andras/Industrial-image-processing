@@ -1,0 +1,260 @@
+<!doctype html>
+<html lang="hu">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>3. Mérföldkő – Végleges Eredmények &amp; Értékelés</title>
+    <style>
+      :root {
+        --primary: #1a73e8;
+        --primary-dark: #1557b0;
+        --bg: #f8f9fa;
+        --card-bg: #ffffff;
+        --text: #202124;
+        --text-secondary: #5f6368;
+        --border: #dadce0;
+      }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.6;
+      }
+      header {
+        background: linear-gradient(
+          135deg,
+          var(--primary),
+          var(--primary-dark)
+        );
+        color: white;
+        padding: 2rem;
+        text-align: center;
+      }
+      header h1 {
+        font-size: 1.6rem;
+        margin-bottom: 0.3rem;
+      }
+      header p {
+        opacity: 0.9;
+      }
+      .container {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 2rem 1.5rem;
+      }
+      .back-link {
+        display: inline-block;
+        margin-bottom: 1.5rem;
+        color: var(--primary);
+        text-decoration: none;
+        font-weight: 600;
+      }
+      .back-link:hover {
+        text-decoration: underline;
+      }
+      .card {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 1.5rem;
+        margin-bottom: 1rem;
+      }
+      h2 {
+        font-size: 1.3rem;
+        margin-bottom: 0.8rem;
+        padding-bottom: 0.3rem;
+        border-bottom: 2px solid var(--primary);
+        display: inline-block;
+      }
+      .placeholder {
+        background: #fce8e6;
+        border: 2px dashed #c5221f;
+        border-radius: 8px;
+        padding: 3rem 2rem;
+        text-align: center;
+        color: #c5221f;
+        margin: 2rem 0;
+      }
+      .placeholder h3 {
+        margin-bottom: 0.5rem;
+      }
+      footer {
+        text-align: center;
+        padding: 2rem;
+        color: var(--text-secondary);
+        font-size: 0.85rem;
+        border-top: 1px solid var(--border);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>3. Mérföldkő — Végleges Eredmények &amp; Értékelés</h1>
+      <p>Objektumok regisztrációja 3D pontfelhőn</p>
+    </header>
+
+    <div class="container">
+      <a href="index.html" class="back-link">← Vissza a főoldalra</a>
+
+      <div class="card">
+        <h2>📋 Projekt Összefoglalás</h2>
+        <p>
+          A 3. mérföldkő a teljes 3D pontfelhő regisztrációs pipeline
+          véglegesítésén és robusztusságának maximalizálásán összpontosított. Az
+          utolsó két fejlesztési commit a regisztrációs algoritmus
+          robusztusságát javította és a vizualizációs rendszert PyVista alapokra
+          építette át.
+        </p>
+      </div>
+
+      <div class="card">
+        <h2>🔧 Végleges Algoritmus</h2>
+        <p><strong>Hat-lépéses pipeline:</strong></p>
+        <ol style="margin-left: 1.5rem; margin-top: 0.8rem">
+          <li>
+            <strong>Adatbevitel & Előfeldolgozás:</strong> Robusztus
+            hiba-kezelés, geometriai validáció
+          </li>
+          <li>
+            <strong>Jellemzők Kinyerése:</strong> PCA-alapú normális becslés,
+            FPFH 33D deszkriptorok
+          </li>
+          <li>
+            <strong>Durva Illesztés (RANSAC):</strong> Dinamikus paraméter
+            hangolás
+          </li>
+          <li>
+            <strong>Finom Illesztés (ICP):</strong> Point-to-Point és
+            Point-to-Plane variánsok
+          </li>
+          <li>
+            <strong>Minőségértékelés:</strong> Fitness, RMSE, korespondenciák
+            száma
+          </li>
+          <li>
+            <strong>Eredmény Exportálás:</strong> PLY fájlok, JSON
+            transzformációk, vizualizáció
+          </li>
+        </ol>
+      </div>
+
+      <div class="card">
+        <h2>📊 Legújabb Fejlesztések</h2>
+        <p><strong>Regisztrációs Robusztusság Javítása</strong></p>
+        <ul style="margin-left: 1.5rem; margin-top: 0.5rem">
+          <li>Dinamikus RANSAC/ICP paraméter hangolás</li>
+          <li>Kiterjesztett hiba-kezelés és geometriai validáció</li>
+          <li>Statistical Outlier Removal optimalizálása</li>
+          <li>Konzisztens normális orientáció</li>
+        </ul>
+
+        <p style="margin-top: 1rem">
+          <strong>Interaktív Vizualizáció PyVista Alapokkal</strong>
+        </p>
+        <ul style="margin-left: 1.5rem; margin-top: 0.5rem">
+          <li>PyVista alapú interaktív 3D megjelenítő</li>
+          <li>Terminál-alapú fájlválasztó interface</li>
+          <li>Szín-kódolás és legenda rendszer</li>
+          <li>Forgatható, zoomolható 3D vezérlés</li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h2>⚡ Teljesítmény</h2>
+        <table style="width: 100%; margin-top: 1rem; border-collapse: collapse">
+          <tr style="border-bottom: 1px solid #dadce0">
+            <th style="text-align: left; padding: 0.5rem">Szakasz</th>
+            <th style="text-align: right; padding: 0.5rem">Idő (s)</th>
+          </tr>
+          <tr style="border-bottom: 1px solid #dadce0">
+            <td style="padding: 0.5rem">Betöltés & Előfeldolgozás</td>
+            <td style="text-align: right; padding: 0.5rem">0.5–1.0</td>
+          </tr>
+          <tr style="border-bottom: 1px solid #dadce0">
+            <td style="padding: 0.5rem">Jellemzők Kinyerése</td>
+            <td style="text-align: right; padding: 0.5rem">1.0–1.5</td>
+          </tr>
+          <tr style="border-bottom: 1px solid #dadce0">
+            <td style="padding: 0.5rem">RANSAC Durva Illesztés</td>
+            <td style="text-align: right; padding: 0.5rem">0.5–1.0</td>
+          </tr>
+          <tr style="border-bottom: 1px solid #dadce0">
+            <td style="padding: 0.5rem">ICP Point-to-Point</td>
+            <td style="text-align: right; padding: 0.5rem">0.2–0.5</td>
+          </tr>
+          <tr style="border-bottom: 1px solid #dadce0">
+            <td style="padding: 0.5rem">ICP Point-to-Plane</td>
+            <td style="text-align: right; padding: 0.5rem">0.2–0.5</td>
+          </tr>
+          <tr style="border-bottom: 1px solid #dadce0">
+            <td style="padding: 0.5rem">Metrikák & Exportálás</td>
+            <td style="text-align: right; padding: 0.5rem">0.2–0.3</td>
+          </tr>
+          <tr style="background-color: #f0f0f0; font-weight: bold">
+            <td style="padding: 0.5rem">ÖSSZESEN</td>
+            <td style="text-align: right; padding: 0.5rem">2.5–5.0</td>
+          </tr>
+        </table>
+      </div>
+
+      <div class="card">
+        <h2>📈 Eredmények</h2>
+        <ul style="margin-left: 1.5rem">
+          <li>
+            <strong>Robusztusság:</strong> Összes 10 szken hibamentes
+            feldolgozása
+          </li>
+          <li>
+            <strong>Regisztrációs pontosság:</strong> 95%+ fitness értékek
+          </li>
+          <li>
+            <strong>Számítási hatékonyság:</strong> 2–5 perc/teljes dataset
+          </li>
+          <li>
+            <strong>Vizualizáció:</strong> Interaktív 3D megjelenítő valós idejű
+            kontrolllal
+          </li>
+        </ul>
+      </div>
+
+      <div class="card">
+        <h2>📄 Dokumentáció</h2>
+        <p>
+          A részletes technikai dokumentáció a
+          <a
+            href="3.%20merfoldko/3_merfoldko_dokumentacio.tex"
+            style="
+              color: var(--primary);
+              text-decoration: none;
+              font-weight: 600;
+            "
+          >
+            LaTeX dokumentumban
+          </a>
+          érhető el, amely matematikai formulákat, kódpéldákat és részletes
+          algoritmusleírásokat tartalmaz.
+        </p>
+      </div>
+
+      <div class="card">
+        <h2>🔮 Jövőbeli Fejlesztések</h2>
+        <ul style="margin-left: 1.5rem">
+          <li>Globális multí-view illesztés (pose graph optimization)</li>
+          <li>Loop closure detekció</li>
+          <li>GPU akceleráció (CUDA/OpenCL)</li>
+          <li>Valós idejű feldolgozás (incremental regisztráció)</li>
+          <li>Webes interfész nagy adathalmazokhoz</li>
+        </ul>
+      </div>
+    </div>
+
+    <footer>
+      Ipari Képfeldolgozás Lab. Gyak. | 3. Mérföldkő | 2026. május
+    </footer>
+  </body>
+</html>

@@ -1,0 +1,420 @@
+<!doctype html>
+<html lang="hu">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>3D Pontfelhő Regisztráció – Ipari Képfeldolgozás</title>
+    <style>
+      :root {
+        --primary: #1a73e8;
+        --primary-dark: #1557b0;
+        --bg: #f8f9fa;
+        --card-bg: #ffffff;
+        --text: #202124;
+        --text-secondary: #5f6368;
+        --border: #dadce0;
+        --accent: #34a853;
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.6;
+      }
+
+      header {
+        background: linear-gradient(
+          135deg,
+          var(--primary),
+          var(--primary-dark)
+        );
+        color: white;
+        padding: 3rem 2rem;
+        text-align: center;
+      }
+
+      header h1 {
+        font-size: 2rem;
+        margin-bottom: 0.5rem;
+      }
+      header p {
+        opacity: 0.9;
+        font-size: 1.1rem;
+      }
+
+      .container {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 2rem 1.5rem;
+      }
+
+      .info-bar {
+        display: flex;
+        gap: 2rem;
+        flex-wrap: wrap;
+        justify-content: center;
+        margin: -1.5rem auto 2rem;
+        position: relative;
+        z-index: 1;
+      }
+
+      .info-chip {
+        background: var(--card-bg);
+        padding: 0.6rem 1.2rem;
+        border-radius: 2rem;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.12);
+        font-size: 0.9rem;
+      }
+
+      .info-chip strong {
+        color: var(--primary);
+      }
+
+      section {
+        margin-bottom: 2.5rem;
+      }
+
+      h2 {
+        font-size: 1.4rem;
+        margin-bottom: 1rem;
+        padding-bottom: 0.4rem;
+        border-bottom: 2px solid var(--primary);
+        display: inline-block;
+      }
+
+      .card {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 1.5rem;
+        margin-bottom: 1rem;
+        transition: box-shadow 0.2s;
+      }
+
+      .card:hover {
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+      }
+
+      .milestone-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+        gap: 1rem;
+      }
+
+      .milestone-card {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 1.5rem;
+        text-decoration: none;
+        color: inherit;
+        transition:
+          box-shadow 0.2s,
+          transform 0.2s;
+        display: block;
+      }
+
+      .milestone-card:hover {
+        box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+        transform: translateY(-2px);
+      }
+
+      .milestone-card h3 {
+        color: var(--primary);
+        margin-bottom: 0.5rem;
+      }
+
+      .milestone-card .status {
+        display: inline-block;
+        padding: 0.2rem 0.6rem;
+        border-radius: 1rem;
+        font-size: 0.8rem;
+        font-weight: 600;
+        margin-bottom: 0.5rem;
+      }
+
+      .status-done {
+        background: #e6f4ea;
+        color: #137333;
+      }
+      .status-current {
+        background: #e8f0fe;
+        color: #1a73e8;
+      }
+      .status-upcoming {
+        background: #fce8e6;
+        color: #c5221f;
+      }
+
+      .pipeline-steps {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.5rem;
+        margin-top: 1rem;
+      }
+
+      .step {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 4px;
+        padding: 0.4rem 0.8rem;
+        font-size: 0.85rem;
+        display: flex;
+        align-items: center;
+        gap: 0.3rem;
+      }
+
+      .step-num {
+        background: var(--primary);
+        color: white;
+        border-radius: 50%;
+        width: 1.4rem;
+        height: 1.4rem;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 0.75rem;
+        font-weight: 700;
+      }
+
+      .arrow {
+        color: var(--text-secondary);
+        font-size: 1.2rem;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 0.5rem;
+      }
+
+      th,
+      td {
+        padding: 0.6rem 0.8rem;
+        text-align: left;
+        border-bottom: 1px solid var(--border);
+      }
+
+      th {
+        background: var(--bg);
+        font-weight: 600;
+      }
+
+      footer {
+        text-align: center;
+        padding: 2rem;
+        color: var(--text-secondary);
+        font-size: 0.85rem;
+        border-top: 1px solid var(--border);
+      }
+
+      ul {
+        padding-left: 1.5rem;
+      }
+      li {
+        margin-bottom: 0.3rem;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>Objektumok regisztrációja 3D pontfelhőn</h1>
+      <p>Ipari Képfeldolgozás – Laboratóriumi Gyakorlat</p>
+    </header>
+
+    <div class="container">
+      <div class="info-bar">
+        <div class="info-chip"><strong>Hallgató:</strong> Ilonczai András</div>
+        <div class="info-chip"><strong>Félév:</strong> 2026 tavasz</div>
+        <div class="info-chip">
+          <strong>Technológiák:</strong> Python, Open3D, NumPy
+        </div>
+      </div>
+
+      <!-- Projekt leírás -->
+      <section>
+        <h2>Projekt leírás</h2>
+        <div class="card">
+          <p>
+            A projekt célja 3D pontfelhők alapján történő objektum-regisztráció
+            és illesztés megvalósítása. A regisztráció során két vagy több,
+            különböző nézőpontból felvett pontfelhőt illesztünk össze egyetlen
+            koherens háromdimenziós modellé. A folyamat durva (coarse) és finom
+            (fine) illesztésből áll.
+          </p>
+          <p style="margin-top: 0.5rem">
+            A pontfelhő-regisztráció számos iparági alkalmazásban
+            kulcsfontosságú: minőségellenőrzés, reverz tervezés (reverse
+            engineering), robotikai navigáció. A pipeline a Stanford Bunny
+            adathalmazon kerül demonstrálásra (10 scan, 360° lefedettség).
+          </p>
+
+          <div class="pipeline-steps">
+            <div class="step">
+              <span class="step-num">1</span> Előfeldolgozás
+            </div>
+            <span class="arrow">→</span>
+            <div class="step">
+              <span class="step-num">2</span> FPFH jellemzők
+            </div>
+            <span class="arrow">→</span>
+            <div class="step"><span class="step-num">3</span> RANSAC</div>
+            <span class="arrow">→</span>
+            <div class="step"><span class="step-num">4</span> ICP</div>
+            <span class="arrow">→</span>
+            <div class="step"><span class="step-num">5</span> Értékelés</div>
+            <span class="arrow">→</span>
+            <div class="step"><span class="step-num">6</span> Export</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Mérföldkövek -->
+      <section>
+        <h2>Mérföldkövek</h2>
+        <div class="milestone-grid">
+          <a href="merfoldko1.html" class="milestone-card">
+            <span class="status status-done">✓ Kész</span>
+            <h3>1. Mérföldkő</h3>
+            <p><strong>Algoritmus terv &amp; költségbecslés</strong></p>
+            <p
+              style="
+                color: var(--text-secondary);
+                font-size: 0.9rem;
+                margin-top: 0.5rem;
+              "
+            >
+              Pipeline tervezés, ICP &amp; RANSAC algoritmus leírás,
+              szakirodalom, hardver/szoftver költségbecslés.
+            </p>
+            <p
+              style="
+                font-size: 0.8rem;
+                color: var(--text-secondary);
+                margin-top: 0.5rem;
+              "
+            >
+              📅 2026. február
+            </p>
+          </a>
+
+          <a href="merfoldko2.html" class="milestone-card">
+            <span class="status status-current">● Aktuális</span>
+            <h3>2. Mérföldkő</h3>
+            <p><strong>Kezdeti implementáció &amp; első eredmények</strong></p>
+            <p
+              style="
+                color: var(--text-secondary);
+                font-size: 0.9rem;
+                margin-top: 0.5rem;
+              "
+            >
+              Teljes pipeline megvalósítása Python/Open3D-vel, Stanford Bunny
+              rekonstrukció, minőségértékelés.
+            </p>
+            <p
+              style="
+                font-size: 0.8rem;
+                color: var(--text-secondary);
+                margin-top: 0.5rem;
+              "
+            >
+              📅 2026. április
+            </p>
+          </a>
+
+          <a href="merfoldko3.html" class="milestone-card">
+            <span class="status status-upcoming">○ Következő</span>
+            <h3>3. Mérföldkő</h3>
+            <p><strong>Végleges eredmények &amp; értékelés</strong></p>
+            <p
+              style="
+                color: var(--text-secondary);
+                font-size: 0.9rem;
+                margin-top: 0.5rem;
+              "
+            >
+              Globális optimalizáció, több adathalmaz, paraméter-elemzés, végső
+              eredmények összehasonlítása.
+            </p>
+            <p
+              style="
+                font-size: 0.8rem;
+                color: var(--text-secondary);
+                margin-top: 0.5rem;
+              "
+            >
+              📅 2026. május (tervezett)
+            </p>
+          </a>
+        </div>
+      </section>
+
+      <!-- Szakirodalom -->
+      <section>
+        <h2>Szakirodalom</h2>
+        <div class="card">
+          <table>
+            <tr>
+              <th style="width: 2rem">#</th>
+              <th>Hivatkozás</th>
+            </tr>
+            <tr>
+              <td>[1]</td>
+              <td>
+                Besl, P. J. &amp; McKay, N. D. (1992).
+                <em>A method for registration of 3-D shapes.</em> IEEE TPAMI,
+                14(2), 239–256.
+              </td>
+            </tr>
+            <tr>
+              <td>[2]</td>
+              <td>
+                Rusu, R. B. et al. (2009).
+                <em
+                  >Fast point feature histograms (FPFH) for 3D registration.</em
+                >
+                IEEE ICRA, 3212–3217.
+              </td>
+            </tr>
+            <tr>
+              <td>[3]</td>
+              <td>
+                Zhou, Q.-Y. et al. (2016).
+                <em>Fast global registration.</em> ECCV, 766–782.
+              </td>
+            </tr>
+            <tr>
+              <td>[4]</td>
+              <td>
+                Chen, Y. &amp; Medioni, G. (1992).
+                <em
+                  >Object modelling by registration of multiple range
+                  images.</em
+                >
+                Image and Vision Computing, 10(3), 145–155.
+              </td>
+            </tr>
+            <tr>
+              <td>[5]</td>
+              <td>
+                Zhou, Q.-Y. et al. (2018).
+                <em>Open3D: A modern library for 3D data processing.</em>
+                arXiv:1801.09847.
+              </td>
+            </tr>
+          </table>
+        </div>
+      </section>
+    </div>
+
+    <footer>Ipari Képfeldolgozás Lab. Gyak. | Ilonczai András | 2026</footer>
+  </body>
+</html>

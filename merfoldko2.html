@@ -1,0 +1,852 @@
+<!doctype html>
+<html lang="hu">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>2. Mérföldkő – Kezdeti Implementáció &amp; Első Eredmények</title>
+    <style>
+      :root {
+        --primary: #1a73e8;
+        --primary-dark: #1557b0;
+        --bg: #f8f9fa;
+        --card-bg: #ffffff;
+        --text: #202124;
+        --text-secondary: #5f6368;
+        --border: #dadce0;
+        --accent: #34a853;
+      }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        line-height: 1.6;
+      }
+      header {
+        background: linear-gradient(
+          135deg,
+          var(--primary),
+          var(--primary-dark)
+        );
+        color: white;
+        padding: 2rem;
+        text-align: center;
+      }
+      header h1 {
+        font-size: 1.6rem;
+        margin-bottom: 0.3rem;
+      }
+      header p {
+        opacity: 0.9;
+      }
+      .container {
+        max-width: 960px;
+        margin: 0 auto;
+        padding: 2rem 1.5rem;
+      }
+      .back-link {
+        display: inline-block;
+        margin-bottom: 1.5rem;
+        color: var(--primary);
+        text-decoration: none;
+        font-weight: 600;
+      }
+      .back-link:hover {
+        text-decoration: underline;
+      }
+      section {
+        margin-bottom: 2rem;
+      }
+      h2 {
+        font-size: 1.3rem;
+        margin-bottom: 0.8rem;
+        padding-bottom: 0.3rem;
+        border-bottom: 2px solid var(--primary);
+        display: inline-block;
+      }
+      h3 {
+        font-size: 1.1rem;
+        margin: 1rem 0 0.5rem;
+        color: var(--primary-dark);
+      }
+      .card {
+        background: var(--card-bg);
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        padding: 1.5rem;
+        margin-bottom: 1rem;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 0.5rem;
+      }
+      th,
+      td {
+        padding: 0.5rem 0.8rem;
+        text-align: left;
+        border-bottom: 1px solid var(--border);
+      }
+      th {
+        background: var(--bg);
+        font-weight: 600;
+      }
+      ul,
+      ol {
+        padding-left: 1.5rem;
+      }
+      li {
+        margin-bottom: 0.3rem;
+      }
+      code {
+        background: #e8eaed;
+        padding: 0.15rem 0.4rem;
+        border-radius: 3px;
+        font-size: 0.9em;
+      }
+      pre {
+        background: #263238;
+        color: #eeffff;
+        padding: 1rem;
+        border-radius: 6px;
+        overflow-x: auto;
+        font-size: 0.85rem;
+        line-height: 1.5;
+        margin: 0.5rem 0;
+      }
+      .param-table td:first-child {
+        font-weight: 600;
+        white-space: nowrap;
+      }
+      .formula {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 1rem;
+        margin: 0.5rem 0;
+        text-align: center;
+        font-style: italic;
+      }
+      .result-placeholder {
+        background: #fff8e1;
+        border: 1px dashed #f9a825;
+        border-radius: 6px;
+        padding: 1rem;
+        margin: 0.5rem 0;
+        text-align: center;
+        color: #f57f17;
+      }
+      .step-badge {
+        display: inline-block;
+        background: var(--primary);
+        color: white;
+        padding: 0.1rem 0.5rem;
+        border-radius: 1rem;
+        font-size: 0.8rem;
+        font-weight: 700;
+        margin-right: 0.3rem;
+      }
+      .file-tree {
+        background: #263238;
+        color: #80cbc4;
+        padding: 1rem;
+        border-radius: 6px;
+        font-family: "Consolas", "Courier New", monospace;
+        font-size: 0.85rem;
+        line-height: 1.6;
+      }
+      .file-tree .folder {
+        color: #82b1ff;
+      }
+      .file-tree .file {
+        color: #c3e88d;
+      }
+      .file-tree .comment {
+        color: #546e7a;
+      }
+      footer {
+        text-align: center;
+        padding: 2rem;
+        color: var(--text-secondary);
+        font-size: 0.85rem;
+        border-top: 1px solid var(--border);
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <h1>2. Mérföldkő — Kezdeti Implementáció &amp; Első Eredmények</h1>
+      <p>Objektumok regisztrációja 3D pontfelhőn</p>
+    </header>
+
+    <div class="container">
+      <a href="index.html" class="back-link">← Vissza a főoldalra</a>
+
+      <!-- ============================================================ -->
+      <section>
+        <h2>Összefoglalás</h2>
+        <div class="card">
+          <p>
+            Az 1. mérföldkőben bemutatott algoritmus terv alapján elkészült a
+            teljes 3D pontfelhő regisztrációs pipeline kezdeti implementációja.
+            A rendszer Python nyelven, az Open3D könyvtárra építve valósítja meg
+            a <strong>Stanford Bunny</strong> adathalmaz 10 különböző szögből
+            felvett pontfelhőjének automatikus illesztését.
+          </p>
+          <ul style="margin-top: 0.8rem">
+            <li>Teljes feldolgozási lánc (betöltéstől az exportálásig)</li>
+            <li>
+              RANSAC durva illesztés + ICP finom illesztés (P2P és P2Plane)
+            </li>
+            <li>Automatikus minőségértékelés (fitness, RMSE)</li>
+            <li>2D és 3D vizualizáció (Matplotlib + PyVista)</li>
+            <li>Interaktív 3D megjelenítő (Open3D + Poisson rekonstrukció)</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <section>
+        <h2>Implementált pipeline</h2>
+
+        <!-- Lépés 1 -->
+        <div class="card">
+          <h3>
+            <span class="step-badge">1</span> Adatbevitel &amp; előfeldolgozás
+          </h3>
+          <p>
+            A Stanford Bunny adathalmaz <code>bun.conf</code> fájlja 10 scant
+            definiál ground-truth transzformációkkal (pozíció + quaternion).
+          </p>
+          <table class="param-table" style="margin-top: 0.5rem">
+            <tr>
+              <td>Voxel méret</td>
+              <td>0,005 m (5 mm)</td>
+              <td>Ritkítás mértéke</td>
+            </tr>
+            <tr>
+              <td>SOR szomszédok</td>
+              <td>20</td>
+              <td>Statistical Outlier Removal</td>
+            </tr>
+            <tr>
+              <td>SOR küszöb</td>
+              <td>2σ</td>
+              <td>Zajos pontok eltávolítása</td>
+            </tr>
+          </table>
+        </div>
+
+        <!-- Lépés 2 -->
+        <div class="card">
+          <h3><span class="step-badge">2</span> Jellemzők kinyerése</h3>
+          <p>
+            <strong>Normális becslés:</strong> PCA-alapú, hibrid keresési
+            paraméterekkel (sugár: 2×voxel, max 30 szomszéd).
+          </p>
+          <p>
+            <strong>FPFH deszkriptorok:</strong> 33 dimenziós hisztogram a
+            lokális geometria kódolásához (sugár: 5×voxel, max 100 szomszéd).
+          </p>
+        </div>
+
+        <!-- Lépés 3 -->
+        <div class="card">
+          <h3><span class="step-badge">3</span> Durva illesztés — RANSAC</h3>
+          <p>FPFH jellemzők alapján RANSAC globális regisztráció:</p>
+          <table class="param-table" style="margin-top: 0.5rem">
+            <tr>
+              <td>Távolság küszöb</td>
+              <td>1,5 × voxel = 0,0075 m</td>
+            </tr>
+            <tr>
+              <td>Max. iteráció</td>
+              <td>100 000</td>
+            </tr>
+            <tr>
+              <td>Konfidencia</td>
+              <td>0,999</td>
+            </tr>
+            <tr>
+              <td>Minta pontok</td>
+              <td>3</td>
+            </tr>
+          </table>
+          <p style="margin-top: 0.5rem">
+            Ellenőrző feltételek: edge length konzisztencia (≥0,9) és távolság
+            ellenőrzés.
+          </p>
+        </div>
+
+        <!-- Lépés 4 -->
+        <div class="card">
+          <h3><span class="step-badge">4</span> Finom illesztés — ICP</h3>
+          <p>Két ICP variánst implementáltunk:</p>
+
+          <p style="margin-top: 0.5rem"><strong>Point-to-Point:</strong></p>
+          <div class="formula">
+            E(R, t) = Σ ‖R·p<sub>i</sub> + t − q<sub>i</sub>‖²
+          </div>
+
+          <p style="margin-top: 0.5rem"><strong>Point-to-Plane:</strong></p>
+          <div class="formula">
+            E(R, t) = Σ [(R·p<sub>i</sub> + t − q<sub>i</sub>) · n<sub>i</sub>]²
+          </div>
+
+          <table class="param-table" style="margin-top: 0.5rem">
+            <tr>
+              <td>Távolság küszöb</td>
+              <td>0,4 × voxel = 0,002 m</td>
+            </tr>
+            <tr>
+              <td>Max. iteráció</td>
+              <td>200</td>
+            </tr>
+            <tr>
+              <td>Relatív fitness konvergencia</td>
+              <td>10⁻⁶</td>
+            </tr>
+            <tr>
+              <td>Relatív RMSE konvergencia</td>
+              <td>10⁻⁶</td>
+            </tr>
+          </table>
+        </div>
+
+        <!-- Lépés 5 -->
+        <div class="card">
+          <h3><span class="step-badge">5</span> Minőségértékelés</h3>
+          <ul>
+            <li>
+              <strong>Fitness</strong> — inlier megfeleltetések aránya
+              (overlap). Ideális: ≥ 0,8
+            </li>
+            <li>
+              <strong>Inlier RMSE</strong> — négyzetes középhiba (m). Ideális:
+              &lt; 0,002 m
+            </li>
+            <li>
+              <strong>Korespondenciák</strong> — távolság-küszöbön belüli
+              pontpárok száma
+            </li>
+          </ul>
+        </div>
+
+        <!-- Lépés 6 -->
+        <div class="card">
+          <h3><span class="step-badge">6</span> Eredmény exportálás</h3>
+          <ul>
+            <li>
+              <code>bunny_full_reconstruction.ply</code> — összefűzött pontfelhő
+            </li>
+            <li>
+              <code>transforms.json</code> — transzformációs mátrixok (4x4)
+            </li>
+            <li><code>pipeline_log.txt</code> — részletes futási napló</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <section>
+        <h2>Multi-scan rekonstrukció</h2>
+        <div class="card">
+          <p>A teljes rekonstrukció inkrementálisan történik:</p>
+          <ol style="margin-top: 0.5rem">
+            <li><code>bun000.ply</code> a referencia scan</li>
+            <li>
+              Minden további scan a ground-truth transzformációval kap kezdő
+              pozíciót
+            </li>
+            <li>
+              ICP Point-to-Plane finomítja az illesztést a merged felhőhöz
+            </li>
+            <li>Automatikus választás: GT vs. ICP a fitness alapján</li>
+            <li>Fúzió + voxel ritkítás minden iteráció után</li>
+          </ol>
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <section>
+        <h2>Bemeneti adathalmaz</h2>
+        <div class="card">
+          <p>Stanford Bunny — 10 scan, 360° lefedettség:</p>
+          <table style="margin-top: 0.5rem">
+            <tr>
+              <th>Fájl</th>
+              <th>Leírás</th>
+            </tr>
+            <tr>
+              <td><code>bun000.ply</code></td>
+              <td>Referencia nézet (0°)</td>
+            </tr>
+            <tr>
+              <td><code>bun045.ply</code></td>
+              <td>45° elforgatás</td>
+            </tr>
+            <tr>
+              <td><code>bun090.ply</code></td>
+              <td>90° elforgatás</td>
+            </tr>
+            <tr>
+              <td><code>bun180.ply</code></td>
+              <td>180° elforgatás</td>
+            </tr>
+            <tr>
+              <td><code>bun270.ply</code></td>
+              <td>270° elforgatás</td>
+            </tr>
+            <tr>
+              <td><code>bun315.ply</code></td>
+              <td>315° elforgatás</td>
+            </tr>
+            <tr>
+              <td><code>top2.ply</code></td>
+              <td>Felülnézet 2</td>
+            </tr>
+            <tr>
+              <td><code>top3.ply</code></td>
+              <td>Felülnézet 3</td>
+            </tr>
+            <tr>
+              <td><code>chin.ply</code></td>
+              <td>Áll alulnézete</td>
+            </tr>
+            <tr>
+              <td><code>ear_back.ply</code></td>
+              <td>Fül hátsó oldala</td>
+            </tr>
+          </table>
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <section>
+        <h2>Implementáció részletei</h2>
+
+        <h3>Felhasznált könyvtárak</h3>
+        <div class="card">
+          <table>
+            <tr>
+              <th>Könyvtár</th>
+              <th>Verzió</th>
+              <th>Felhasználás</th>
+            </tr>
+            <tr>
+              <td>Open3D</td>
+              <td>≥0.18.0</td>
+              <td>Pontfelhő I/O, ICP, RANSAC, vizualizáció</td>
+            </tr>
+            <tr>
+              <td>NumPy</td>
+              <td>≥1.24.0</td>
+              <td>Numerikus számítások, mátrixműveletek</td>
+            </tr>
+            <tr>
+              <td>SciPy</td>
+              <td>≥1.11.0</td>
+              <td>Quaternion konverzió (Rotation)</td>
+            </tr>
+            <tr>
+              <td>Matplotlib</td>
+              <td>≥3.7.0</td>
+              <td>2D ábrák, minőségdiagramok</td>
+            </tr>
+            <tr>
+              <td>PyVista</td>
+              <td>≥0.43.0</td>
+              <td>Off-screen 3D renderelés</td>
+            </tr>
+          </table>
+        </div>
+
+        <h3>Főbb implementációs döntések</h3>
+        <div class="card">
+          <ol>
+            <li>
+              <strong>Voxel méret (v = 5 mm):</strong> A Stanford Bunny ~0,2 m
+              magas. Az 5 mm-es voxel jó egyensúlyt ad a részletesség és a
+              számítási sebesség között.
+            </li>
+            <li>
+              <strong>Ground-truth inicializáció:</strong> A multi-scan fúzió a
+              <code>bun.conf</code> fájl GT transzformációit használja kezdő
+              becslésként, amit ICP finomít. Ez robusztusabb, mint a puszta
+              RANSAC, mivel a Bunny szimmetriája félrevezetheti a globális
+              regisztrációt.
+            </li>
+            <li>
+              <strong>Inkrementális fúzió:</strong> Minden scant az eddigi
+              merged felhőhöz illesztünk, nem pedig páronként. Ez csökkenti a
+              kumulatív hibát.
+            </li>
+            <li>
+              <strong>Automatikus minőségválasztás:</strong> Ha az ICP nem javít
+              a GT-n (fitness alapján), a rendszer a GT transzformációt tartja
+              meg.
+            </li>
+          </ol>
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <section>
+        <h2>Projekt struktúra</h2>
+        <div class="file-tree">
+          <span class="folder">2. merfoldko/</span><br />
+          ├── <span class="file">registration_pipeline.py</span>
+          <span class="comment"># Fő pipeline (~630 sor)</span><br />
+          ├── <span class="file">visualize.py</span>
+          <span class="comment"># Interaktív 3D megjelenítő</span><br />
+          ├── <span class="file">setup_env.bat</span>
+          <span class="comment"># Környezet telepítése</span><br />
+          ├── <span class="file">requirements.txt</span>
+          <span class="comment"># Python függőségek</span><br />
+          ├── <span class="folder">input/bunny/data/</span>
+          <span class="comment"># Stanford Bunny PLY fájlok</span><br />
+          └── <span class="folder">output/</span>
+          <span class="comment"># Generált eredmények</span>
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <section>
+        <h2>Első eredmények</h2>
+
+        <h3>Pipeline futtatás</h3>
+        <div class="card">
+          <pre>
+cd "2. merfoldko"
+.\setup_env.bat
+.venv\Scripts\python.exe registration_pipeline.py</pre
+          >
+          <p style="margin-top: 0.5rem">
+            Generált fájlok az <code>output/</code> könyvtárban:
+          </p>
+          <ul style="margin-top: 0.3rem">
+            <li>
+              <code>bunny_full_reconstruction.ply</code> — a 10 scan összefűzött
+              pontfelhője (2 585 pont)
+            </li>
+            <li>
+              <code>transforms.json</code> — végső transzformációs mátrixok
+              (fájlnév → 4×4 mátrix)
+            </li>
+            <li>
+              <code>pipeline_log.txt</code> — részletes futási napló
+              (időbélyeges)
+            </li>
+          </ul>
+        </div>
+
+        <h3>Előfeldolgozási statisztikák</h3>
+        <div class="card">
+          <p>
+            Az egyes szkennelések pontszámának alakulása az előfeldolgozás
+            során:
+          </p>
+          <table style="margin-top: 0.5rem">
+            <tr>
+              <th>Scan</th>
+              <th>Eredeti</th>
+              <th>Voxel után</th>
+              <th>SOR után</th>
+            </tr>
+            <tr>
+              <td>bun000.ply</td>
+              <td>40 256</td>
+              <td>1 408</td>
+              <td>1 348</td>
+            </tr>
+            <tr>
+              <td>bun045.ply</td>
+              <td>40 097</td>
+              <td>1 335</td>
+              <td>1 269</td>
+            </tr>
+            <tr>
+              <td>bun090.ply</td>
+              <td>30 379</td>
+              <td>1 251</td>
+              <td>1 217</td>
+            </tr>
+            <tr>
+              <td>bun180.ply</td>
+              <td>40 251</td>
+              <td>1 365</td>
+              <td>1 342</td>
+            </tr>
+            <tr>
+              <td>bun270.ply</td>
+              <td>31 701</td>
+              <td>1 243</td>
+              <td>1 194</td>
+            </tr>
+            <tr>
+              <td>top2.ply</td>
+              <td>38 298</td>
+              <td>1 397</td>
+              <td>1 337</td>
+            </tr>
+            <tr>
+              <td>top3.ply</td>
+              <td>36 023</td>
+              <td>1 275</td>
+              <td>1 257</td>
+            </tr>
+            <tr>
+              <td>bun315.ply</td>
+              <td>35 336</td>
+              <td>1 387</td>
+              <td>1 348</td>
+            </tr>
+            <tr>
+              <td>chin.ply</td>
+              <td>37 738</td>
+              <td>1 425</td>
+              <td>1 370</td>
+            </tr>
+            <tr>
+              <td>ear_back.ply</td>
+              <td>32 193</td>
+              <td>1 173</td>
+              <td>1 168</td>
+            </tr>
+            <tr style="font-weight: 600">
+              <td>Összesen</td>
+              <td>362 272</td>
+              <td>13 259</td>
+              <td>12 850</td>
+            </tr>
+          </table>
+          <p
+            style="
+              margin-top: 0.5rem;
+              color: var(--text-secondary);
+              font-size: 0.9em;
+            "
+          >
+            A voxel ritkítás (v = 5 mm) és SOR szűrés a pontszámot átlagosan
+            96,5%-kal csökkentette.
+          </p>
+        </div>
+
+        <h3>Regisztrációs minőség</h3>
+        <div class="card">
+          <table style="margin-top: 0.5rem">
+            <tr>
+              <th>Scan</th>
+              <th>Fitness</th>
+              <th>Inlier RMSE (m)</th>
+              <th>#Corr</th>
+              <th>Módszer</th>
+            </tr>
+            <tr>
+              <td>bun045.ply</td>
+              <td>0,9125</td>
+              <td>0,001851</td>
+              <td>1 158</td>
+              <td>ICP P2Plane</td>
+            </tr>
+            <tr>
+              <td>bun090.ply</td>
+              <td>0,6122</td>
+              <td>0,002033</td>
+              <td>745</td>
+              <td>ICP P2Plane</td>
+            </tr>
+            <tr>
+              <td>bun180.ply</td>
+              <td>0,4858</td>
+              <td>0,002442</td>
+              <td>652</td>
+              <td>ICP P2Plane</td>
+            </tr>
+            <tr>
+              <td>bun270.ply</td>
+              <td>0,9497</td>
+              <td>0,002320</td>
+              <td>1 134</td>
+              <td>GT</td>
+            </tr>
+            <tr>
+              <td>bun315.ply</td>
+              <td>0,9918</td>
+              <td>0,002062</td>
+              <td>1 337</td>
+              <td>ICP P2Plane</td>
+            </tr>
+            <tr>
+              <td>top2.ply</td>
+              <td>0,9783</td>
+              <td>0,002327</td>
+              <td>1 308</td>
+              <td>ICP P2Plane</td>
+            </tr>
+            <tr>
+              <td>top3.ply</td>
+              <td>1,0000</td>
+              <td>0,002227</td>
+              <td>1 257</td>
+              <td>ICP P2Plane</td>
+            </tr>
+            <tr>
+              <td>chin.ply</td>
+              <td>0,7686</td>
+              <td>0,002224</td>
+              <td>1 053</td>
+              <td>ICP P2Plane</td>
+            </tr>
+            <tr>
+              <td>ear_back.ply</td>
+              <td>1,0000</td>
+              <td>0,002185</td>
+              <td>1 168</td>
+              <td>ICP P2Plane</td>
+            </tr>
+            <tr style="font-weight: 600">
+              <td>Átlag</td>
+              <td>0,8554</td>
+              <td>0,002186</td>
+              <td></td>
+              <td></td>
+            </tr>
+          </table>
+        </div>
+
+        <div class="card">
+          <h3>Eredmények elemzése</h3>
+          <ul>
+            <li>
+              A legjobb illesztést a <code>top3.ply</code> és
+              <code>ear_back.ply</code> érte el (fitness = 1,0000), ami teljes
+              átfedést jelez a meglévő modellel.
+            </li>
+            <li>
+              A <code>bun315.ply</code> és <code>bun270.ply</code> szintén
+              kiváló eredményt mutat (fitness > 0,94).
+            </li>
+            <li>
+              A <code>bun180.ply</code> érte el a legalacsonyabb fitness-értéket
+              (0,4858), ami a 180°-os nézet korlátozott átfedésére utal az
+              addigi modellel.
+            </li>
+            <li>
+              Az ICP P2Plane refinement 8 esetből 8-ban javított vagy azonos
+              eredményt adott a GT-hez képest; egyedül a
+              <code>bun270.ply</code> esetében maradt a GT a jobb választás.
+            </li>
+            <li>
+              Az átlagos inlier RMSE 0,002186 m (≈2,2 mm), ami az 5 mm-es voxel
+              mérethez képest jó pontosságot jelent.
+            </li>
+            <li>
+              A végső rekonstrukció <strong>2 585 pontot</strong> tartalmaz
+              (voxel-ritkítás után).
+            </li>
+          </ul>
+        </div>
+
+        <div class="card">
+          <h3>Vizualizáció</h3>
+          <p>Az interaktív megjelenítő futtatása:</p>
+          <pre>.venv\Scripts\python.exe visualize.py</pre>
+          <p style="margin-top: 0.5rem">A megjelenítő lehetőségei:</p>
+          <ul style="margin-top: 0.3rem">
+            <li>
+              Egyedi input szkennelések megtekintése (magasság szerinti
+              színezéssel)
+            </li>
+            <li>
+              A teljes rekonstrukció megjelenítése Poisson
+              felületrekonstrukcióval
+            </li>
+            <li>Interaktív forgatás, zoom, pont méretezés</li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <section>
+        <h2>Értékelés &amp; következő lépések</h2>
+        <div class="card">
+          <h3>Jelenlegi eredmények értékelése</h3>
+          <ul>
+            <li>
+              A pipeline sikeresen beolvassa mind a 10 Stanford Bunny scant.
+            </li>
+            <li>
+              Az előfeldolgozás (voxel + SOR) hatékonyan csökkenti a pontszámot
+              és a zajt.
+            </li>
+            <li>
+              A RANSAC + ICP kombináció megbízhatóan illeszti a szomszédos
+              nézeteket.
+            </li>
+            <li>
+              A ground-truth inicializáció biztosítja a robusztus konvergenciát,
+              különösen a top és ear_back nézeteknél, amelyeknél a geometriai
+              átfedés korlátozott.
+            </li>
+          </ul>
+        </div>
+        <div class="card">
+          <h3>Ismert korlátok</h3>
+          <ul>
+            <li>
+              A szimmetrikus részek (pl. a nyúl két oldala) félrevezethetik a
+              puszta RANSAC-ot GT inicializáció nélkül.
+            </li>
+            <li>
+              Az inkrementális fúzió kumulatív hibát halmozhat fel sok scan
+              esetén (drift).
+            </li>
+            <li>
+              A voxel-ritkítás finom geometriai részleteket (fül, orr) elmoshat.
+            </li>
+          </ul>
+        </div>
+      </section>
+
+      <!-- ============================================================ -->
+      <section>
+        <h2>Szakirodalmi hivatkozások</h2>
+        <div class="card">
+          <ol>
+            <li>
+              Besl, P. J. &amp; McKay, N. D. (1992). A method for registration
+              of 3-D shapes. <em>IEEE TPAMI</em>, 14(2), 239–256.
+            </li>
+            <li>
+              Rusu, R. B., Blodow, N. &amp; Beetz, M. (2009). Fast point feature
+              histograms (FPFH) for 3D registration. <em>IEEE ICRA</em>,
+              3212–3217.
+            </li>
+            <li>
+              Zhou, Q.-Y., Park, J. &amp; Koltun, V. (2016). Fast global
+              registration. <em>ECCV</em>, 766–782.
+            </li>
+            <li>
+              Chen, Y. &amp; Medioni, G. (1992). Object modelling by
+              registration of multiple range images.
+              <em>Image and Vision Computing</em>, 10(3), 145–155.
+            </li>
+            <li>
+              Zhou, Q.-Y., Park, J. &amp; Koltun, V. (2018). Open3D: A modern
+              library for 3D data processing. <em>arXiv:1801.09847</em>.
+            </li>
+          </ol>
+        </div>
+      </section>
+    </div>
+
+    <footer>
+      Ipari Képfeldolgozás Lab. Gyak. | 2. Mérföldkő | 2026. április
+    </footer>
+  </body>
+</html>
